@@ -1,29 +1,54 @@
 ### A Pluto.jl notebook ###
-# v0.19.0
+# v0.19.2
 
 using Markdown
 using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
 
 # ╔═╡ 813485d8-c0c4-11ec-3dd1-216422157967
 begin 
 	using Plots
 	using Polyhedra
+	using Optim
+	using LazySets
+	using PlutoUI
 end
 
+# ╔═╡ 001919b8-dd50-4dd9-b515-73fef567b750
+md"## Define a height function"
+
 # ╔═╡ 7dedf665-7d99-43ef-bd85-c6fad8656e74
-x = 0:0.05:1
+x = -0.05:0.05:1.05
 
 # ╔═╡ ce505be9-a6a2-4cc0-ae1b-f96dd9de3202
-h = sin.(5π*x) .+ 2sin.(π*x) .+ 0.2rand(length(x))
+h = [0.5, sin.(5π*x[2:end-1]) .+ 2sin.(π*x[2:end-1]) .+ 0.2rand(length(x[2:end-1])) .+ x[2:end-1] ..., 0.5]
+
+# ╔═╡ 9c2a7ce5-4c38-4dc9-a124-0836e7101fe2
+h[end-1] = 0
+
+# ╔═╡ 9ef695e8-7a44-4ba0-a10c-03cdcfcbd01e
+exited_srs = [1,5]
 
 # ╔═╡ 9b152845-aff1-4821-bbd0-5300b26e1034
 plot(x, h, marker=true, label="height")
 
+# ╔═╡ 3a403b91-000b-4cb0-9f4b-fdcee34a1e54
+md"## General Graph Functions"
+
 # ╔═╡ cd153675-e5d0-4629-b5cd-a3a2cabb99ee
-begin
-	G = [[] for _ in 1:length(x)]
-	for i in 1:length(x)
-		if i+1 <= length(x) 
+function graph_1d(N)
+	G = [[] for _ in 1:N]
+	for i in 1:N
+		if i+1 <= N
 			push!(G[i], i+1)
 		end
 		if i-1 >= 1
@@ -45,9 +70,10 @@ function edges(G)
 end
 
 # ╔═╡ 1acbddbf-c62f-45ab-a4e8-897adae06c99
-begin
-	U = [[] for _ in 1:length(x)]
-	for i=1:length(x)
+function upslope_neighbors(G, h)
+	N = length(G)
+	U = [[] for _ in 1:N]
+	for i=1:N
 		hs = [h[n] for n in G[i]]
 		hmax_i = argmax(hs)
 		hmax = hs[hmax_i]
@@ -55,20 +81,31 @@ begin
 			push!(U[i], G[i][hmax_i])
 		end
 	end
+	U
 end
+
+# ╔═╡ 0f1e62a9-5bf8-4408-97a9-0012608438c4
+md"## Construct Local Graphs"
+
+# ╔═╡ 33e52f39-4f40-4b18-a952-8708ac8432d2
+G = graph_1d(length(x))
+
+# ╔═╡ 42ede2ce-5f3d-45cf-8529-a94687fa0513
+U = upslope_neighbors(G,h)
 
 # ╔═╡ 944fa45e-e2cf-4889-96f0-134aeaff17d4
 begin
-	p = scatter(x, h, marker=true, label="height", legend=:bottom, title="Upslope Neighbors")
-	for i=rand(1:length(x), 10)
+	p = scatter(x, h, marker=true, alpha=0.4, label="", legend=:bottom, title="Upslope Neighbors")
+	for i=1:length(x)
 		if !isempty(U[i])
-			plot!(p, [x[i], x[U[i][1]]], [h[i], h[U[i][1]]], label="$i")
+			plot!(p, [x[i], x[U[i][1]]], [h[i], h[U[i][1]]], arrow=true, label="", color=1)
 		end
 	end
+	p
 end
 
-# ╔═╡ c56afc5e-89e0-4bc8-82a1-3fc5aa668465
-p
+# ╔═╡ 38f6e20d-8092-4a4c-b204-da856302b35a
+md"## Determine Spill Regions"
 
 # ╔═╡ cda923f8-ad94-4b65-9326-cefcb7d4f896
 function set_spill_region(SR, sr_index, G, U, max_i)
@@ -90,13 +127,20 @@ function set_spill_region(SR, sr_index, G, U, max_i)
 end
 
 # ╔═╡ 07f1f8f3-b764-4ca2-8c10-48a12a5cd698
-begin
-	SR = zeros(Int, length(x))
+function spill_regions(G, U, h)
+	N = length(G)
+	SR = zeros(Int, N)
 	maxes = findall(U .== [[]])
+	UB = zeros(length(maxes))
 	for (i, max_i) in zip(1:length(maxes), maxes)
 		set_spill_region(SR, i, G, U, max_i)
+		UB[i] = h[max_i]
 	end
+	SR, UB
 end
+
+# ╔═╡ a8e2e979-0b64-4ae0-b32e-be10528c1f3b
+SR, UB = spill_regions(G, U, h)
 
 # ╔═╡ 3f705fd0-5829-4962-ad18-6faf18127603
 begin
@@ -110,41 +154,284 @@ begin
 	p_sr
 end
 
+# ╔═╡ e57326a5-252c-4350-bd2c-336d8d91eafd
+md"## Spill Region Connectivity"
+
 # ╔═╡ 2530b71d-f715-4f69-ae36-271751578057
-SPE = edges(G)[findall([SR[e[1]] != SR[e[2]] for e in edges(G)])]
+function spill_edges(G, SR)
+	edges(G)[findall([SR[e[1]] != SR[e[2]] for e in edges(G)])]
+end
 
 # ╔═╡ 0b16ce54-1bce-4f04-ae26-ceba9866e666
-begin
-	SPG = [[] for _ in unique(SR)]
-	for e in SPE
+function spill_region_graph(G, SR, SE)
+	SRG = [[] for _ in 1:maximum(SR)]
+	for e in SE
 		for n in e
-			push!(SPG[SR[n]], e)
+			push!(SRG[SR[n]], e)
 		end
 	end
-	SPG
+	SRG
 end
 
 # ╔═╡ 375d4de1-bfdc-41e9-92a7-94eee82efed5
-begin
-	SPU = []
-	for E in SPG
+function upslope_spill_regions(SR, SRG, h)
+	SRE, USR = [], zeros(Int, maximum(SR))
+	for (i, E) in zip(1:length(SRG), SRG)
+		if isempty(E)
+			push!(SRE, [])
+			
+			continue
+		end
+		# Set the spill region edge
 		ei = argmax([min(h[e[1]], h[e[2]]) for e in E])
-		push!(SPU, E[ei])
+		push!(SRE, E[ei])
+
+		# Set the upstream spill region index
+		edge_nodes = SR[E[ei]]
+		n_adj = edge_nodes[edge_nodes .!= i][1]
+		USR[i] = n_adj
 	end
-	SPU
+	SRE, USR
+end
+
+# ╔═╡ 06df6d82-73c1-4626-a622-f7a81d534fa8
+function upslope_spill_regions_fromG(G, SR, h)
+	SE = spill_edges(G, SR)
+	SRG = spill_region_graph(G, SR, SE)
+	upslope_spill_regions(SR, SRG, h)
+end
+
+# ╔═╡ c3eb8e23-6e24-47cb-9b71-d43a8d0db27a
+SE = spill_edges(G, SR)
+
+# ╔═╡ cbf3c2e9-8f63-4c19-80f0-d3c71c9fab6f
+SRG = spill_region_graph(G, SR, SE)
+
+# ╔═╡ bea377ea-08e9-4518-abef-08b79f275d4e
+SRE, USR = upslope_spill_regions(SR, SRG, h)
+
+# ╔═╡ 6c6348c3-29f3-4faf-96e5-0cb9fd580a01
+function merge_spill_regions(SR, UB, sr, G, h, USR)
+	# Identify the connected spill region
+	se = USR[sr]
+	edge_nodes = SR[se]
+	n_adj = edge_nodes[edge_nodes .!= sr][1]
+
+	# Update upper bound
+	UB_new = copy(UB)
+	UB_new[sr] = min(h[se]...)
+
+	# Relabel and combine nodes
+	SR_new = copy(SR)
+	SR_new[SR_new .== n_adj] .= sr
+
+	# reconstruct spill region graphs
+	SR_new, UB_new, upslope_spill_regions_fromG(G, SR_new, h)...
+end
+
+# ╔═╡ d040ab66-2cde-4bd8-9a4c-aaeec0421506
+SR
+
+# ╔═╡ 0e0eba63-9a2d-483c-9ac4-757f7733f1ab
+UB
+
+# ╔═╡ f9cdf8fd-c6c3-4294-80a2-69cef24e8768
+SRE
+
+# ╔═╡ 7f05c42c-65b7-4970-a74e-98df8b00c09a
+SR_merge, UB_merge, SRE_merge, USR_merge = merge_spill_regions(SR, UB,  3, G, h, SRE)
+
+# ╔═╡ d8cce3e9-e75a-4a71-b70a-1d79be0137f1
+SR_merge2, UB_merge2, SRE_merge2, USR_merge2 = merge_spill_regions(SR_merge, UB_merge,  3, G, h, SRE_merge)
+
+# ╔═╡ 95d3b43e-55e5-4316-81f9-c0485bafc5e9
+USR_merge[2]
+
+# ╔═╡ 683cb3ae-c227-4b01-9f06-6cba65233ec7
+begin
+	p_sr_new = plot(x, h, legend = :bottom, label="")
+	for sr in unique(SR_merge)
+		plot!([], [], label="spill region: $sr", color=sr)
+	end
+	for i in 1:length(x)
+		scatter!([x[i]], [h[i]], color=SR_merge[i], label="")
+	end
+	p_sr_new
 end
 
 # ╔═╡ c735a4d2-5cd2-4a3a-830c-b169c55becc7
+md"## Polyhedra functions"
 
+# ╔═╡ b607667e-7f48-491c-8ebc-253137f98d14
+function get_intersection(p1, p2, p3, p4)
+	a = LineSegment(p1, p2)
+	b = LineSegment(p3, p4)
+	pt = intersection(a,b)
+	@assert !isempty(pt)
+
+	return pt.element
+end
+
+# ╔═╡ 600f1d76-bf13-4dc9-8f2a-650700dfa05d
+function get_polyhedron(SR, sr, x, h, d)
+	# get all indices above the depth
+	indices = findall((h .> d) .& (SR .== sr))
+	l = indices[1] - 1
+	r = indices[end] + 1
+
+	hline = [[x[l], d], [x[r], d]]
+
+	p1 = get_intersection([x[l], h[l]], [x[l+1], h[l+1]], hline...)
+	p2 = get_intersection([x[r-1], h[r-1]], [x[r], h[r]], hline...)
+
+	points = [p1, [[x[i], h[i]] for i in indices]..., p2]
+
+	
+	triangle1 = polyhedron(convexhull(points[1], points[2], [points[2][1], d]))
+	polyhedra = [triangle1]
+	
+	for i=2:length(points)-1
+		poly = polyhedron(convexhull(points[i], points[i+1], [points[i+1][1], d], [points[i][1], d]))
+		push!(polyhedra, poly)
+	end
+	triangle2 = polyhedron(convexhull(points[end], points[end-1], [points[end-1][1], d]))
+	push!(polyhedra, triangle2)
+	polyhedra
+end
+
+# ╔═╡ 815865ce-44da-4d37-83c8-dc3f97ea7e3e
+begin
+	polys = get_polyhedron(SR_merge, 3, x, h, 1.3)
+	for p in polys
+		plot!(p_sr, p, label="depth=2.3", color=:blue)
+	end
+	p_sr
+end
+
+# ╔═╡ ede47d57-e8e9-4f9f-8f6d-3c3a411f637b
+function spill_region_volume(SR, sr, x, h, d)
+	sum([Polyhedra.volume(p) for p in get_polyhedron(SR, sr, x, h, d)])
+end
+
+# ╔═╡ 46215d52-cc0e-4572-b7d1-0c81e6949621
+function spill_region_max_poly(SR, SRE, sr, x, h)
+	d = min(h[SRE[sr]]...)
+	get_polyhedron(SR, sr, x, h, d)
+end
+
+# ╔═╡ dcee5de2-bf85-43eb-b4f7-56aef9245cf4
+function spill_region_max_volume(SR, SRE, sr, x, h)
+	sum([Polyhedra.volume(p) for p in spill_region_max_poly(SR, SRE, sr, x, h,)])
+end
+
+# ╔═╡ fc7ef97f-2185-40db-8bb7-0358d2f11009
+spill_region_max_volume(SR, SRE, 3, x, h)
+
+# ╔═╡ 0a7e9865-a1d9-4e7b-99e2-a43079fb3e1f
+spill_region_max_volume(SR_merge, SRE_merge, 3, x, h)
+
+# ╔═╡ 7f6d34fb-b910-423e-989d-633859cf61cc
+spill_region_max_volume(SR_merge, SRE_merge, 3, x, h)
+
+# ╔═╡ 784efe8a-9212-4c00-bc78-71218dcefeb8
+spill_region_max_volume(SR_merge2, SRE_merge2, 3, x, h)
+
+# ╔═╡ 7269b5e8-5fbf-4fa2-98f8-4c3df4a8ce83
+SR_merge
+
+# ╔═╡ 638dadd3-40bd-4977-ad4e-8df4206681ae
+SRE_merge
+
+# ╔═╡ 505199c9-58ac-4bf7-ac07-88cc283efa3a
+md"## Optimize for the depth"
+
+# ╔═╡ c16151d6-281e-4998-8974-a9b26541ac50
+function get_depth(SR, UB, SRE, sr, x, h, v)
+	vol_diff(d) = (spill_region_volume(SR, sr, x, h, d) - v)^2
+
+	lo = min(h[SRE[sr]]...)
+
+	Optim.minimizer(optimize(vol_diff, lo, UB[sr]))
+end
+
+# ╔═╡ b584958f-7295-4f71-a94f-18abd688c5d8
+d = get_depth(SR, UB, SRE, 2, x, h, .4)
+
+# ╔═╡ e84ca5ab-724d-42e4-a1b1-40ec298b4411
+md"## Injecting arbitary volumes"
+
+# ╔═╡ 6b72f945-797f-458d-9795-636e95e7fa94
+function fill(G, SR, UB, SRE, USR, sr, x, h, v)
+	vtrapped = 0
+	filled_srs = []
+	polys = []
+	
+	while vtrapped < v
+		vremain = v - vtrapped
+		if spill_region_max_volume(SR, SRE, sr, x, h) > vremain
+			d = get_depth(SR, UB, SRE, sr, x, h, vremain)
+			ps = get_polyhedron(SR, sr, x, h, d)
+			vtrapped = v
+			push!(polys, ps...)
+		else
+			ps = spill_region_max_poly(SR, SRE, sr, x, h)
+			vtrapped += sum(Polyhedra.volume.(ps))
+			push!(polys, ps...)
+			
+			push!(filled_srs, sr)
+			new_sr = USR[sr]
+			if new_sr in exited_srs
+				return polys, vtrapped, v - vtrapped
+			end
+			if new_sr in filled_srs
+				SR, UB, SRE, USR = merge_spill_regions(SR, UB, sr, G, h, SRE)
+				vtrapped = 0
+				polys = []
+				filled_srs = []
+			else
+				sr = new_sr
+			end
+		end
+	end
+	polys, vtrapped, 0
+end
+
+# ╔═╡ 945c3a21-1a85-4e9f-b6a4-bea5988a8d3f
+@bind v Slider(0:0.01:2.9)
+
+# ╔═╡ 2e43c417-6732-430e-aea2-0f2ac9f53cc5
+begin
+	x_inj = 12
+	sr_inj = SR[10]
+	poly, v_trapped, v_exited = fill(G, SR, UB, SRE, USR, sr_inj, x, h, v);
+	p3 = plot(x, h, legend = :bottom, label="")
+	for i in 1:length(x)
+		scatter!([x[i]], [h[i]], color=SR[i], label="")
+	end
+	for p in poly
+		try plot!(p, color=:green) catch end
+	end
+	plot!([x[x_inj], x[x_inj]], [h[x_inj] + 0.5, h[x_inj]], arrow=true, linewidth=4, color=:black, label="")
+	
+	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")
+	
+	plot(p3, p4, size=(900,300))
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+LazySets = "b4f0291d-fe17-52bc-9479-3d1a343d9043"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Polyhedra = "67491407-f73d-577b-9b50-8179a7c68029"
 
 [compat]
+LazySets = "~1.56.3"
+Optim = "~1.6.2"
 Plots = "~1.27.6"
+PlutoUI = "~0.7.38"
 Polyhedra = "~0.7.5"
 """
 
@@ -155,6 +442,12 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 julia_version = "1.7.2"
 manifest_format = "2.0"
 
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "8eaf9f1b4921132a4cff3f36a1d9ba923b14a481"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.1.4"
+
 [[deps.Adapt]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "af92965fb30777147966f58acb05da51c5616b5f"
@@ -163,6 +456,12 @@ version = "3.3.3"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
+
+[[deps.ArrayInterface]]
+deps = ["Compat", "IfElse", "LinearAlgebra", "Requires", "SparseArrays", "Static"]
+git-tree-sha1 = "c933ce606f6535a7c7b98e1d86d5d1014f730596"
+uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+version = "5.0.7"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -181,6 +480,18 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+0"
+
+[[deps.CRlibm]]
+deps = ["CRlibm_jll"]
+git-tree-sha1 = "32abd86e3c2025db5172aa182b982debed519834"
+uuid = "96374032-68de-5a5b-8d9e-752f78720389"
+version = "1.0.1"
+
+[[deps.CRlibm_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "e329286945d0cfc04456972ea732551869af1cfc"
+uuid = "4e9b3aee-d8a1-5a3d-ad8b-7d824db253f0"
+version = "1.0.1+0"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -314,11 +625,21 @@ git-tree-sha1 = "3f3a2501fa7236e9b911e0f7a588c657e822bb6d"
 uuid = "5ae413db-bbd1-5e63-b57d-d24a61df00f5"
 version = "2.2.3+0"
 
+[[deps.ErrorfreeArithmetic]]
+git-tree-sha1 = "d6863c556f1142a061532e79f611aa46be201686"
+uuid = "90fa49ef-747e-5e6f-a989-263ba693cf1a"
+version = "0.5.2"
+
 [[deps.Expat_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "bad72f730e9e91c08d9427d5e8db95478a3c323d"
 uuid = "2e619515-83b5-522b-bb60-26c02a35a201"
 version = "2.4.8+0"
+
+[[deps.ExprTools]]
+git-tree-sha1 = "56559bbef6ca5ea0c0818fa5c90320398a6fbf8d"
+uuid = "e2ba6199-217a-4e67-a87a-7c52f15ade04"
+version = "0.1.8"
 
 [[deps.FFMPEG]]
 deps = ["FFMPEG_jll"]
@@ -331,6 +652,24 @@ deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers",
 git-tree-sha1 = "d8a578692e3077ac998b50c0217dfd67f21d1e5f"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
 version = "4.4.0+0"
+
+[[deps.FastRounding]]
+deps = ["ErrorfreeArithmetic", "LinearAlgebra"]
+git-tree-sha1 = "6344aa18f654196be82e62816935225b3b9abe44"
+uuid = "fa42c844-2597-5d31-933b-ebd51ab2693f"
+version = "0.3.1"
+
+[[deps.FillArrays]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
+git-tree-sha1 = "246621d23d1f43e3b9c368bf3b72b2331a27c286"
+uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
+version = "0.13.2"
+
+[[deps.FiniteDiff]]
+deps = ["ArrayInterface", "LinearAlgebra", "Requires", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "56956d1e4c1221000b7781104c58c34019792951"
+uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
+version = "2.11.0"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -373,6 +712,22 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Pkg", "Xorg_libXcu
 git-tree-sha1 = "51d2dfe8e590fbd74e7a842cf6d13d8a2f45dc01"
 uuid = "0656b61e-2033-5cc2-a64a-77c0f6c09b89"
 version = "3.3.6+0"
+
+[[deps.GLPK]]
+deps = ["GLPK_jll", "MathOptInterface"]
+git-tree-sha1 = "c3cc0a7a4e021620f1c0e67679acdbf1be311eb0"
+uuid = "60bf3e95-4087-53dc-ae20-288a0d20c6a6"
+version = "1.0.1"
+
+[[deps.GLPK_jll]]
+deps = ["Artifacts", "GMP_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "fe68622f32828aa92275895fdb324a85894a5b1b"
+uuid = "e8aa6df9-e6ca-548a-97ff-1f85fc5b8b98"
+version = "5.0.1+0"
+
+[[deps.GMP_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "781609d7-10c4-51f6-84f2-b8444358ff6d"
 
 [[deps.GR]]
 deps = ["Base64", "DelimitedFiles", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Printf", "Random", "RelocatableFolders", "Serialization", "Sockets", "Test", "UUIDs"]
@@ -433,6 +788,28 @@ git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
 
+[[deps.Hyperscript]]
+deps = ["Test"]
+git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
+version = "0.0.4"
+
+[[deps.HypertextLiteral]]
+git-tree-sha1 = "2b078b5a615c6c0396c77810d92ee8c6f470d238"
+uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+version = "0.9.3"
+
+[[deps.IOCapture]]
+deps = ["Logging", "Random"]
+git-tree-sha1 = "f7be53659ab06ddc986428d3a9dcc95f6fa6705a"
+uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
+version = "0.2.2"
+
+[[deps.IfElse]]
+git-tree-sha1 = "debdd00ffef04665ccbb3e150747a77560e8fad1"
+uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
+version = "0.1.1"
+
 [[deps.IniFile]]
 git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
 uuid = "83e8ac13-25f8-5344-8a64-a9f2b223428f"
@@ -441,6 +818,12 @@ version = "0.5.1"
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[deps.IntervalArithmetic]]
+deps = ["CRlibm", "FastRounding", "LinearAlgebra", "Markdown", "Random", "RecipesBase", "RoundingEmulator", "SetRounding", "StaticArrays"]
+git-tree-sha1 = "1fa3ba0893ea5611830feedac46b7f95872cbd01"
+uuid = "d1acc4aa-44c8-5952-acd4-ba5d80a2a253"
+version = "0.20.5"
 
 [[deps.InverseFunctions]]
 deps = ["Test"]
@@ -516,6 +899,12 @@ git-tree-sha1 = "6f14549f7760d84b2db7a9b10b88cd3cc3025730"
 uuid = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
 version = "0.15.14"
 
+[[deps.LazySets]]
+deps = ["Distributed", "ExprTools", "GLPK", "InteractiveUtils", "IntervalArithmetic", "JuMP", "LinearAlgebra", "Pkg", "Random", "RecipesBase", "Reexport", "Requires", "SharedArrays", "SparseArrays"]
+git-tree-sha1 = "0c8cd82d402a8fba49cd88ca5bcde9d22ab1bdcb"
+uuid = "b4f0291d-fe17-52bc-9479-3d1a343d9043"
+version = "1.56.3"
+
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
@@ -583,6 +972,12 @@ git-tree-sha1 = "7f3efec06033682db852f8b3bc3c1d2b0a0ab066"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.36.0+0"
 
+[[deps.LineSearches]]
+deps = ["LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "Printf"]
+git-tree-sha1 = "f27132e551e959b3667d8c93eae90973225032dd"
+uuid = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+version = "7.1.1"
+
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -645,6 +1040,12 @@ git-tree-sha1 = "ba8c0f8732a24facba709388c74ba99dcbfdda1e"
 uuid = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
 version = "1.0.0"
 
+[[deps.NLSolversBase]]
+deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
+git-tree-sha1 = "50310f934e55e5ca3912fb941dec199b49ca9b68"
+uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
+version = "7.8.2"
+
 [[deps.NaNMath]]
 git-tree-sha1 = "b086b7ea07f8e38cf122f5016af580881ac914fe"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
@@ -679,6 +1080,12 @@ git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.5+0"
 
+[[deps.Optim]]
+deps = ["Compat", "FillArrays", "ForwardDiff", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
+git-tree-sha1 = "bc0a748740e8bc5eeb9ea6031e6f050de1fc0ba2"
+uuid = "429524aa-4258-5aef-a3af-852621145aeb"
+version = "1.6.2"
+
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
@@ -695,6 +1102,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "b2a7af664e098055a7529ad1a900ded962bca488"
 uuid = "2f80f16e-611a-54ab-bc61-aa92de5b98fc"
 version = "8.44.0+0"
+
+[[deps.Parameters]]
+deps = ["OrderedCollections", "UnPack"]
+git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
+uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+version = "0.12.3"
 
 [[deps.Parsers]]
 deps = ["Dates"]
@@ -730,11 +1143,23 @@ git-tree-sha1 = "6f2dd1cf7a4bbf4f305a0d8750e351cb46dfbe80"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 version = "1.27.6"
 
+[[deps.PlutoUI]]
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
+git-tree-sha1 = "670e559e5c8e191ded66fa9ea89c97f10376bb4c"
+uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+version = "0.7.38"
+
 [[deps.Polyhedra]]
 deps = ["GenericLinearAlgebra", "GeometryBasics", "JuMP", "LinearAlgebra", "MutableArithmetics", "RecipesBase", "SparseArrays", "StaticArrays"]
 git-tree-sha1 = "d6aaf7dd794fdcd7896cfc98301f6ffe84a99f56"
 uuid = "67491407-f73d-577b-9b50-8179a7c68029"
 version = "0.7.5"
+
+[[deps.PositiveFactorizations]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
+uuid = "85a6dd25-e78a-55b7-8502-1745935b8125"
+version = "0.2.4"
 
 [[deps.Preferences]]
 deps = ["TOML"]
@@ -752,9 +1177,9 @@ uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
 [[deps.Qt5Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "xkbcommon_jll"]
-git-tree-sha1 = "ad368663a5e20dbb8d6dc2fddeefe4dae0781ae8"
+git-tree-sha1 = "c6c0f690d0cc7caddb74cef7aa847b824a16b256"
 uuid = "ea2cea3b-5b76-57ae-a6ef-0a8af62496e1"
-version = "5.15.3+0"
+version = "5.15.3+1"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -792,6 +1217,11 @@ git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.0"
 
+[[deps.RoundingEmulator]]
+git-tree-sha1 = "40b9edad2e5287e05bd413a38f61a8ff55b9557b"
+uuid = "5eaf0fd0-dfba-4ccb-bf02-d820a40db705"
+version = "0.2.1"
+
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
@@ -803,6 +1233,11 @@ version = "1.1.0"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[[deps.SetRounding]]
+git-tree-sha1 = "d7a25e439d07a17b7cdf97eecee504c50fedf5f6"
+uuid = "3cc68bcd-71a2-5612-b932-767ffbe40ab0"
+version = "0.2.1"
 
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
@@ -832,6 +1267,12 @@ deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jl
 git-tree-sha1 = "5ba658aeecaaf96923dce0da9e703bd1fe7666f9"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
 version = "2.1.4"
+
+[[deps.Static]]
+deps = ["IfElse"]
+git-tree-sha1 = "87e9954dfa33fd145694e42337bdd3d5b07021a6"
+uuid = "aedffcd0-7271-4cad-89d0-dc628f76c6d3"
+version = "0.6.0"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
@@ -899,6 +1340,11 @@ version = "1.3.0"
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[[deps.UnPack]]
+git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
+uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
+version = "1.0.2"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
@@ -1131,20 +1577,60 @@ version = "0.9.1+5"
 
 # ╔═╡ Cell order:
 # ╠═813485d8-c0c4-11ec-3dd1-216422157967
+# ╟─001919b8-dd50-4dd9-b515-73fef567b750
 # ╠═7dedf665-7d99-43ef-bd85-c6fad8656e74
 # ╠═ce505be9-a6a2-4cc0-ae1b-f96dd9de3202
+# ╠═9c2a7ce5-4c38-4dc9-a124-0836e7101fe2
+# ╠═9ef695e8-7a44-4ba0-a10c-03cdcfcbd01e
 # ╠═9b152845-aff1-4821-bbd0-5300b26e1034
+# ╟─3a403b91-000b-4cb0-9f4b-fdcee34a1e54
 # ╠═cd153675-e5d0-4629-b5cd-a3a2cabb99ee
 # ╠═64ec56ea-321b-4ca0-9173-6ba10cf271d4
 # ╠═1acbddbf-c62f-45ab-a4e8-897adae06c99
+# ╟─0f1e62a9-5bf8-4408-97a9-0012608438c4
+# ╠═33e52f39-4f40-4b18-a952-8708ac8432d2
+# ╠═42ede2ce-5f3d-45cf-8529-a94687fa0513
 # ╠═944fa45e-e2cf-4889-96f0-134aeaff17d4
-# ╠═c56afc5e-89e0-4bc8-82a1-3fc5aa668465
+# ╟─38f6e20d-8092-4a4c-b204-da856302b35a
 # ╠═cda923f8-ad94-4b65-9326-cefcb7d4f896
 # ╠═07f1f8f3-b764-4ca2-8c10-48a12a5cd698
+# ╠═a8e2e979-0b64-4ae0-b32e-be10528c1f3b
 # ╠═3f705fd0-5829-4962-ad18-6faf18127603
+# ╟─e57326a5-252c-4350-bd2c-336d8d91eafd
 # ╠═2530b71d-f715-4f69-ae36-271751578057
 # ╠═0b16ce54-1bce-4f04-ae26-ceba9866e666
 # ╠═375d4de1-bfdc-41e9-92a7-94eee82efed5
-# ╠═c735a4d2-5cd2-4a3a-830c-b169c55becc7
+# ╠═06df6d82-73c1-4626-a622-f7a81d534fa8
+# ╠═c3eb8e23-6e24-47cb-9b71-d43a8d0db27a
+# ╠═cbf3c2e9-8f63-4c19-80f0-d3c71c9fab6f
+# ╠═bea377ea-08e9-4518-abef-08b79f275d4e
+# ╠═6c6348c3-29f3-4faf-96e5-0cb9fd580a01
+# ╠═d040ab66-2cde-4bd8-9a4c-aaeec0421506
+# ╠═0e0eba63-9a2d-483c-9ac4-757f7733f1ab
+# ╠═f9cdf8fd-c6c3-4294-80a2-69cef24e8768
+# ╠═7f05c42c-65b7-4970-a74e-98df8b00c09a
+# ╠═d8cce3e9-e75a-4a71-b70a-1d79be0137f1
+# ╠═95d3b43e-55e5-4316-81f9-c0485bafc5e9
+# ╠═683cb3ae-c227-4b01-9f06-6cba65233ec7
+# ╟─c735a4d2-5cd2-4a3a-830c-b169c55becc7
+# ╠═b607667e-7f48-491c-8ebc-253137f98d14
+# ╠═600f1d76-bf13-4dc9-8f2a-650700dfa05d
+# ╠═815865ce-44da-4d37-83c8-dc3f97ea7e3e
+# ╠═ede47d57-e8e9-4f9f-8f6d-3c3a411f637b
+# ╠═46215d52-cc0e-4572-b7d1-0c81e6949621
+# ╠═dcee5de2-bf85-43eb-b4f7-56aef9245cf4
+# ╠═fc7ef97f-2185-40db-8bb7-0358d2f11009
+# ╠═0a7e9865-a1d9-4e7b-99e2-a43079fb3e1f
+# ╠═7f6d34fb-b910-423e-989d-633859cf61cc
+# ╠═784efe8a-9212-4c00-bc78-71218dcefeb8
+# ╠═7269b5e8-5fbf-4fa2-98f8-4c3df4a8ce83
+# ╠═638dadd3-40bd-4977-ad4e-8df4206681ae
+# ╟─505199c9-58ac-4bf7-ac07-88cc283efa3a
+# ╠═c16151d6-281e-4998-8974-a9b26541ac50
+# ╠═b584958f-7295-4f71-a94f-18abd688c5d8
+# ╟─e84ca5ab-724d-42e4-a1b1-40ec298b4411
+# ╠═6b72f945-797f-458d-9795-636e95e7fa94
+# ╠═945c3a21-1a85-4e9f-b6a4-bea5988a8d3f
+# ╠═2e43c417-6732-430e-aea2-0f2ac9f53cc5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -74,7 +74,7 @@ POMDPs.isterminal(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState) = s.
 
 POMDPs.initialstate(m::SpillpointInjectionPOMDP) = m.s0_dist
 
-function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState)
+function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a)
 	poly, v_trapped, v_exited = inject(s.m, s.sr, s.v_trapped+s.v_exited)
 	x, h = s.m.x, s.m.h
 	p3 = plot(x, h, legend = :topleft, label="", )
@@ -85,15 +85,17 @@ function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInject
 		plot!(p, color=:green, label="")
 	end
 	maxh = maximum(s.m.h)
-	plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="Injector")
-	obs_label = "Observation"
+	plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title="action: $a")
+	obs_label = "" #"Observation"
 	for o in s.obs_wells
 		plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue, label=obs_label)
 		obs_label = ""
 	end
 	
-	# p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")
+	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")
 	p3
-	# plot(p3, p4, size=(900,300))
+	plot(p3, p4, size=(900,300))
 end
+
+POMDPModelTools.render(m::SpillpointInjectionPOMDP, step; kwargs...) = render(m, step[:s], step[:a])
 

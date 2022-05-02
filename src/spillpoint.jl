@@ -50,6 +50,9 @@ function get_depth(m::SpillpointMesh, sr, v)
 	vol_diff(d) = (spill_region_volume(m, d, sr) - v)^2
 
 	lo = min(m.h[m.SRE[sr]]...)
+	if lo >= m.UB[sr]
+		return lo
+	end
 
 	Optim.minimizer(optimize(vol_diff, lo, m.UB[sr]))
 end

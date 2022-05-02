@@ -140,6 +140,11 @@ function merge_spill_regions(m::SpillpointMesh, sr)
 	# Identify the connected spill region
 	se = m.USR[sr]
 	edge_nodes = m.SR[se]
+	if all(edge_nodes .== sr)
+		println("Weird")
+		global error_mesh = m
+		global error_sr = sr
+	end
 	n_adj = edge_nodes[edge_nodes .!= sr][1]
 
 	# Update upper bound

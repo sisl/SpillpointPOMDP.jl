@@ -7,6 +7,7 @@ using POMCPOW
 using POMDPSimulators
 using ParticleFilters
 using POMDPPolicies
+using D3Trees
 
 ## Playing around with the POMDP
 
@@ -33,20 +34,21 @@ sp1, o1, r1 = gen(pomdp, s0, (:inject, 0.1))
 @assert o1 == []
 
 # We can then call gen to place an observation well at x=0.6
-sp2, o2, r2 = gen(pomdp, sp, (:observe, 0.6))
+sp2, o2, r2 = gen(pomdp, sp1, (:observe, 0.6))
 
 # We can see the observation well and the injected CO2 by rendering
-render(pomdp, sp2)
+render(pomdp, sp2, "")
 
 # The resulting observations gives a noisy estimate of the amount of CO2 below
-o
+o2
 
 ## Solving the POMDP
 
 # Setup and run the solver
-solver = POMCPOWSolver(tree_queries=100)
+solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=true)
 planner = solve(solver, pomdp)
 
 # Run two different solvers
-simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100))
-simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100))
+simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100)) #0.672
+simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100)) # 
+

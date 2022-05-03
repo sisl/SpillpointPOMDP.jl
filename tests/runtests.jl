@@ -11,4 +11,3 @@ planner = solve(solver, pomdp)
 
 # mygif = simulate(GifSimulator(filename="ccs.gif"), pomdp, RandomPolicy(pomdp)) # Random policy gif
 mygif = simulate(GifSimulator(filename="ccs.gif"), pomdp, planner, BootstrapFilter(pomdp, 100))
-

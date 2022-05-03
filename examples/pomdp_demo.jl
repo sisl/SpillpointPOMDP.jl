@@ -49,6 +49,8 @@ solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=tr
 planner = solve(solver, pomdp)
 
 # Run two different solvers
-simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100)) #0.672
-simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100)) # 
+mean([simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100)) for _=1:10]) #0.0678
+mean([simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100)) for _=1:10])
+
+simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100))
 

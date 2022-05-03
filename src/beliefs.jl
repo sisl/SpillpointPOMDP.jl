@@ -1,5 +1,5 @@
 @with_kw struct SubsurfaceDistribution
-	x = collect(0:0.01:1)
+	x = collect(0:0.02:1)
 	x_inj = 0.25
 	ρ = Distributions.Uniform(0.5, 1.5)
 	lobe_height = Distributions.Uniform(0.05, 0.25)

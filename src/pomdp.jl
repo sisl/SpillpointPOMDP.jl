@@ -15,8 +15,8 @@ end
 	injection_rates = [0.005, 0.01, 0.02]
 	obs_locations = collect(0:0.2:1)
 	obs_noise_std = 0.02
-	obs_reward = -1
-	exited_reward = -100
+	obs_reward =  0
+	exited_reward = 0
 	trapped_reward = 1
 	s0_dist = SubsurfaceDistribution()
 end
@@ -32,6 +32,7 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	obs_wells = copy(s.obs_wells)
 	injection_rate = s.injection_rate
 
+	println("action: ", a)
 	if a[1] == :stop
 		injection_rate=0
 		stop=true
@@ -44,6 +45,10 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	end
 	
 	total_injected = s.v_trapped + s.v_exited + pomdp.Δt * injection_rate
+
+	println("injection_rate: ", injection_rate)
+	println("total_injected: ", total_injected)
+
 	polys, v_trapped, v_exited = inject(s.m, s.sr, total_injected)
 	
 	sp = SpillpointInjectionState(s; polys, v_trapped, v_exited, obs_wells, stop, injection_rate)
@@ -64,8 +69,17 @@ function POMDPs.reward(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	Δexited = sp.v_exited - s.v_exited
 	Δtrapped = sp.v_trapped - s.v_trapped
 	new_well = a[1] == :observe
+
+	println("Δexited: ", Δexited)
+	println("Δtrapped: ", Δtrapped)
+	println("pomdp.obs_reward*new_well: ", (pomdp.obs_reward*new_well))
 	
-	pomdp.exited_reward*Δexited + pomdp.trapped_reward*Δtrapped + pomdp.obs_reward*new_well
+	
+	reward = pomdp.exited_reward*Δexited + pomdp.trapped_reward*Δtrapped + pomdp.obs_reward*new_well
+
+	println("REWARD", reward)
+	println("___________________________")
+	return reward
 end
 
 POMDPs.discount(::SpillpointInjectionPOMDP) = 0.99

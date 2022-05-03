@@ -8,28 +8,42 @@
 end
 
 function Base.rand(ssd::SubsurfaceDistribution)
-	x = ssd.x
+
+	flag = true
+
+	while flag
+		try 
+			x = ssd.x
 	
-	# Sample the shape parameters
-	c1 = rand(ssd.lobe_height)
-	c2 = rand(ssd.center_height)
-	c3 = rand(ssd.linear_amplitude)
+			# Sample the shape parameters
+			c1 = rand(ssd.lobe_height)
+			c2 = rand(ssd.center_height)
+			c3 = rand(ssd.linear_amplitude)
+			
+			# Determine the shape
+			h = c1*sin.(5π*x) .+ c2*sin.(π*x) .+ c3 * x
+			
+			# Set the end points to be considered leaking
+			h[1] = maximum(h)
+			h[end] = h[1]
+			
+			# Sampling the porosity
+			ρ = rand(ssd.ρ)
 	
-	# Determine the shape
-	h = c1*sin.(5π*x) .+ c2*sin.(π*x) .+ c3 * x
+			# Create the mesh and determine the injection spill region
+
+			m = SpillpointMesh(x, h, ρ)
+			sr = spill_region(m, ssd.x_inj)
+			
+			flag=false
+			return SpillpointInjectionState(;m, sr, ssd.x_inj)
+		catch
+			flag=true
+			
+
+	end
 	
-	# Set the end points to be considered leaking
-	h[1] = maximum(h)
-	h[end] = h[1]
 	
-	# Sampling the porosity
-	ρ = rand(ssd.ρ)
-	
-	# Create the mesh and determine the injection spill region
-	m = SpillpointMesh(x, h, ρ)
-	sr = spill_region(m, ssd.x_inj)
-	
-	SpillpointInjectionState(;m, sr, ssd.x_inj)
 end
 
 Base.rand(ssd::SubsurfaceDistribution, d::Int) = [rand(ssd) for _ in 1:d]

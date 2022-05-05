@@ -44,11 +44,27 @@ o2
 
 ## Solving the POMDP
 
+
+
+
+
+
+
 # Setup and run the solver
 solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=true)
 planner = solve(solver, pomdp)
 
 # Run two different solvers
+
+hist = simulate(HistoryRecorder(), pomdp, planner, BootstrapFilter(pomdp, 100))
+
+step = hist[1]
+
+simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100))
+
+
+inchrome(D3Tree(planner.tree))
+
 mean([simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100)) for _=1:10]) #0.0678
 mean([simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100)) for _=1:10])
 

@@ -11,6 +11,7 @@ try using POMDPPolicies catch;Pkg.add("POMDPPolicies"); using POMDPPolicies end
 try using Revise catch;Pkg.add("Revise"); using Revise end
 try using D3Trees catch;Pkg.add("D3Trees"); using D3Trees end
 try using Random catch;Pkg.add("Random"); using Random end
+using POMDPGifs
 
 ## Playing around with the POMDP
 
@@ -53,6 +54,12 @@ solver = POMCPOWSolver(tree_queries=100)
 planner = solve(solver, pomdp)
 
 # Run two different solvers
+
+mygif = simulate(GifSimulator(filename="ccs.gif"), pomdp, planner, BootstrapFilter(pomdp, 100))
+
+
+inchrome(D3Tree(planner.tree))
+
 simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100))
 
 
@@ -60,6 +67,5 @@ simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 
 
 hr = simulate(HistoryRecorder(), pomdp, planner, BootstrapFilter(pomdp, 100))
 
+step = hist[1]
 
-
-inchrome(D3Tree(planner.tree))

@@ -19,7 +19,7 @@ b = initialstate(pomdp)
 
 # sampling or loading s0, truth
 
-loading, s0_name = true, "s0_problem7"
+loading, s0_name = true, "state_examples/s0_problem8"
 if loading
     s0 = deserialize(s0_name)
 else
@@ -27,6 +27,9 @@ else
     serialize(s0_name, s0)
 end
 
+sp, o, r = gen(pomdp, s0, (:inject, .6))
+
+render(pomdp, sp)
 
 solver = POMCPOWSolver(tree_queries=100, tree_in_info=true)
 planner = solve(solver, pomdp)

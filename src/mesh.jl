@@ -145,7 +145,7 @@ function merge_spill_regions(m::SpillpointMesh, sr)
 
 	# Update upper bound
 	UB_new = deepcopy(m.UB)
-	UB_new[sr] = min(m.h[se]...)
+	UB_new[sr] = min(m.h[m.SRE[se]]...)
 
 	# Relabel and combine nodes
 	SR_new = deepcopy(m.SR)

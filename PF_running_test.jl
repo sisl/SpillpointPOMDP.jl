@@ -11,6 +11,8 @@ using D3Trees
 using POMDPGifs
 using Serialization
 
+
+
 # Initialize the pomdp
 pomdp = SpillpointInjectionPOMDP()
 
@@ -19,7 +21,9 @@ b = initialstate(pomdp)
 
 # sampling or loading s0, truth
 
-loading, s0_name = true, "state_examples/s0_problem8"
+
+loading, s0_name = false, "s0_problem8"
+
 if loading
     s0 = deserialize(s0_name)
 else
@@ -82,7 +86,7 @@ while !isterminal(pomdp, s0)
         
 end
 
-
+inchrome(D3Tree(planner.tree))
 
 
 # Running it with the simulate function directly:

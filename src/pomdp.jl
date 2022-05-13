@@ -29,7 +29,7 @@ end
 
 function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG)
 	stop = s.stop
-	obs_wells = copy(s.obs_wells)
+	obs_wells = deepcopy(s.obs_wells)
 	injection_rate = s.injection_rate
 
 	if a[1] == :stop
@@ -74,7 +74,7 @@ POMDPs.isterminal(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState) = s.
 
 POMDPs.initialstate(m::SpillpointInjectionPOMDP) = m.s0_dist
 
-function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing)
+function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; timestep=nothing)
 	poly, v_trapped, v_exited = inject(s.m, s.sr, s.v_trapped+s.v_exited)
 	x, h = s.m.x, s.m.h
 	p3 = plot(x, h, legend = :topleft, label="", )
@@ -82,10 +82,16 @@ function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInject
 	# 	scatter!([x[i]], [h[i]], color=s.m.SR[i], label="")
 	# end
 	for p in poly
-		plot!(p, color=:green, label="")
+		if Polyhedra.volume(p) != 0
+			plot!(p, color=:green, label="")
+		end
 	end
 	maxh = maximum(s.m.h)
-	plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title=isnothing(a) ? "" : "action: $a")
+	title=isnothing(a) ? "" : "action: $a"
+	if !isnothing(timestep)
+		title = string(title, " timestep: $timestep")
+	end
+	plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title=title)
 	obs_label = "" #"Observation"
 	for o in s.obs_wells
 		plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue, label=obs_label)

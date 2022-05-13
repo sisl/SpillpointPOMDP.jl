@@ -9,6 +9,15 @@ using ParticleFilters
 using POMDPPolicies
 using D3Trees
 
+function plot_belief(b; title)
+   plt = plot(title=title)
+   for p in b.particles
+       plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
+   end
+   plot!(s0.m.x, s0.m.h, color=:red, label="ground truth")
+   plt
+end
+
 ## Playing around with the POMDP
 
 # Initialize the pomdp
@@ -18,11 +27,8 @@ pomdp = SpillpointInjectionPOMDP()
 b = initialstate(pomdp)
 s0 = rand(b)
 
-plot()
-for p in rand(b, 100)
-    plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
-end
-plot!(s0.m.x, s0.m.h, color=:red, label="ground truth")
+# Plot the belief
+plot_belief(b)
 
 # Here are the possible actions
 as = actions(pomdp)
@@ -47,6 +53,47 @@ o2
 # Setup and run the solver
 solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=true)
 planner = solve(solver, pomdp)
+
+
+
+s = s0
+up = BootstrapFilter(pomdp, 100)
+b0 = initialize_belief(up, initialstate(pomdp))
+b = deepcopy(b0)
+
+renders = []
+belief_plots = []
+trees=[]
+i=0
+
+while !isterminal(pomdp, s)
+   a, ai = action_info(planner, b)
+   push!(trees, ai[:tree])
+   println("action: ", a)
+   sp, o, r = gen(pomdp, s, a)
+   push!(renders, render(pomdp, sp, timestep=i))
+   println("observation: ", o)
+   b, bi = update_info(up, b, a, o)
+   s = deepcopy(sp)
+   push!(belief_plots, plot_belief(b, title="timestep: $i"))
+   i=i+1
+end
+
+anim = @animate for p in belief_plots
+   plot(p)
+end
+
+gif(anim, "beliefs.gif", fps=2)
+
+anim = @animate for p in renders
+   plot(p)
+end
+
+gif(anim, "renders.gif", fps=2)
+
+inchrome(D3Tree(trees[1]))
+
+
 
 # Run two different solvers
 mean([simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100)) for _=1:10]) #0.0678

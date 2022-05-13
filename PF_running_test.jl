@@ -14,11 +14,20 @@ using Serialization
 # Initialize the pomdp
 pomdp = SpillpointInjectionPOMDP()
 
-# Plot the belief and the ground truth state
+
 b = initialstate(pomdp)
-#s0 = rand(b)
-#serialize("s0_problem5", s0)
-s0 = deserialize("s0_XXX")
+
+# sampling or loading s0, truth
+
+loading, s0_name = true, "s0_problem7"
+if loading
+    s0 = deserialize(s0_name)
+else
+    s0 = rand(b)
+    serialize(s0_name, s0)
+end
+
+
 solver = POMCPOWSolver(tree_queries=100, tree_in_info=true)
 planner = solve(solver, pomdp)
 

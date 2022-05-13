@@ -13,11 +13,26 @@ using D3Trees
 pomdp = SpillpointInjectionPOMDP()
 
 # Plot the belief and the ground truth state
-b = initialstate(pomdp)
-s0 = rand(b)
+s0_dist = initialstate(pomdp)
+s0 = rand(s0_dist)
 solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=true)
 planner = solve(solver, pomdp)
-# action(planner, b)
+
+
+
+up = SubsurfaceUpdater(pomdp)
+
+up = update(updater, b, a, o)
+
+
+
+
+
+
+
+b = BootstrapFilter(pomdp, 100)
+
+updater(pomdp)
 
 action_hist = []
 V = 0
@@ -29,6 +44,10 @@ while !isterminal(pomdp, s0)
     a = action(planner, b) 
     println(a)
     sp,o,r = gen(pomdp, s0, a)
+
+    
+    b = update(up, b, a, o)
+
     s0 = sp
     V += POMDPs.discount(pomdp)^(t-1)*r
     t += 1

@@ -6,15 +6,16 @@
 	v_trapped = 0
 	v_exited = 0
 	injection_rate = 0
-	obs_wells = []
+	obs_wells::Vector{Float64} = []
 	stop = false
+	p_set::Vector{Float64}
 end
 
 @with_kw struct SpillpointInjectionPOMDP <: POMDP{SpillpointInjectionState, Tuple{Symbol, Float64}, AbstractArray}
 	Δt = .1
 	injection_rates = [0.005, 0.01, 0.02]
 	obs_locations = collect(0:0.2:1)
-	obs_noise_std = 0.02
+	obs_noise_std = 0.008
 	obs_reward = -.1
 	exited_reward = -10000
 	trapped_reward = 100
@@ -52,11 +53,36 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 end
 
 function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
+
+	# This observation is the depth of the surface
 	if isempty(sp.obs_wells)
 		return Deterministic([])
 	else
-		observations = [observe_depth(sp.polys, x_well) for x_well in sp.obs_wells]
+		#observations = [observe_depth(sp.polys, x_well) for x_well in sp.obs_wells]
+		observations = []
+		for obs_well in sp.obs_wells
+			x= obs_well
+			ρ = s.p_set[1]
+			c1 = s.p_set[2]
+			c2 = s.p_set[3]
+			c3 = s.p_set[4]
+
+			# rand 100 particles having 
+
+			# Determine the shape
+			h = c1*sin.(5π*x) .+ c2*sin.(π*x) .+ c3 * x
+
+			push!(observations, h)
+
+		end
+		#println("before: ", observations)
+		observations = observations .* 1.0 # convert to float
+		#println("after: ", typeof(observations))
+
+
+
 		MvNormal(observations, Diagonal(pomdp.obs_noise_std^2 * ones(length(observations))))
+
 	end
 end
 
@@ -65,6 +91,10 @@ function POMDPs.reward(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	Δtrapped = sp.v_trapped - s.v_trapped
 	new_well = a[1] == :observe
 	
+	#println("exited reward: ", (pomdp.exited_reward*Δexited))
+	#println("trapped reward: ", (pomdp.trapped_reward*Δtrapped))
+	#println("obs reward: ", (pomdp.obs_reward*new_well))
+
 	pomdp.exited_reward*Δexited + pomdp.trapped_reward*Δtrapped + pomdp.obs_reward*new_well
 end
 

@@ -10,6 +10,7 @@ module SpillpointAnalysis
 	using POMDPModelTools
 	using Plots
 	using Random
+	using Distances
 
 	export SpillpointMesh
 	include("mesh.jl")
@@ -17,11 +18,14 @@ module SpillpointAnalysis
 	export inject
 	include("spillpoint.jl")
 
-	export SubsurfaceDistribution
-	include("beliefs.jl")
-
 	export SpillpointInjectionPOMDP
 	include("pomdp.jl")
+
+	export SubsurfaceDistribution
+	export SubsurfaceUpdater
+	include("beliefs.jl")
+
+
 
 end
 

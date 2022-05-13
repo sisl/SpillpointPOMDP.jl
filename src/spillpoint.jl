@@ -117,3 +117,21 @@ function observe_depth(polygons, x_obs)
 	0
 end
 
+# function observe_depth_surface(, x_obs)
+
+# 	ρ = p_set[1]
+# 	c1 = p_set[2]
+# 	c2 = p_set[3]
+# 	c3 = p_set[4]
+	
+# 	# rand 100 particles having 
+	
+# 	# Determine the shape
+# 	h = c1*sin.(5π*x) .+ c2*sin.(π*x) .+ c3 * x
+
+# end
+
+
+
+
+

@@ -18,7 +18,7 @@ pomdp = SpillpointInjectionPOMDP()
 b = initialstate(pomdp)
 #s0 = rand(b)
 #serialize("s0_problem5", s0)
-s0 = deserialize("s0_problem5")
+s0 = deserialize("s0_XXX")
 solver = POMCPOWSolver(tree_queries=100, tree_in_info=true)
 planner = solve(solver, pomdp)
 

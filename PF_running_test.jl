@@ -16,18 +16,13 @@ pomdp = SpillpointInjectionPOMDP()
 
 # Plot the belief and the ground truth state
 b = initialstate(pomdp)
-s0 = rand(b)
-serialize("s0_problem5", s0)
+#s0 = rand(b)
+#serialize("s0_problem5", s0)
+s0 = deserialize("s0_problem5")
 solver = POMCPOWSolver(tree_queries=100, tree_in_info=true)
 planner = solve(solver, pomdp)
 
 up = SubsurfaceUpdater(pomdp)
-
-# hist = simulate(HistoryRecorder(), pomdp, planner, BootstrapFilter(pomdp, 100))
-
-# hist = simulate(HistoryRecorder(), pomdp, planner, up, BootstrapFilter(pomdp, 1))
-
-# initialize_belief(up, BootstrapFilter(pomdp, 1))
 
 # hist = simulate(GifSimulator(filename="ccs_new.gif"), pomdp, planner, up)
 
@@ -50,7 +45,6 @@ while !isterminal(pomdp, s0)
     println("step: ", t)
     push!(belief_hist, b)
 
-    # problem: state does not get updated - keeps on filling up because no history of volumes in belief
     a = action(planner, b) 
     #println(a)
     sp, o, r = gen(pomdp, s0, a)
@@ -73,11 +67,7 @@ while !isterminal(pomdp, s0)
     t += 1
     push!(action_hist, a)
     push!(reward_hist, r)
-    
-    
-    
-    #POMDPModelTools.render(pomdp, s0, "")  
-    
+        
 end
 
 
@@ -85,7 +75,7 @@ end
 
 # Running it with the simulate function directly:
 
-#hist = simulate(HistoryRecorder(), pomdp, planner, BootstrapFilter(pomdp, 100))
+#hist = simulate(HistoryRecorder(), pomdp, planner, up)
 
 
 # Plotting beliefs

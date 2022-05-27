@@ -15,7 +15,7 @@ end
 	injection_rates = [0.005, 0.01, 0.02]
 	obs_locations = collect(0:0.2:1)
 	obs_noise_std = 0.02
-	obs_reward = -.1
+	obs_reward = -.01
 	exited_reward = -10000
 	trapped_reward = 100
 	s0_dist = SubsurfaceDistribution()

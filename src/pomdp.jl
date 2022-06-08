@@ -10,6 +10,18 @@
 	stop = false
 end
 
+# @with_kw mutable struct SpillpointInjectionMDPState
+# 	m::SpillpointMesh
+# 	sr
+# 	x_inj
+# 	polys = []
+# 	v_trapped = 0
+# 	v_exited = 0
+# 	injection_rate = 0
+# 	obs_wells = []
+# 	stop = false
+# end
+
 @with_kw struct SpillpointInjectionPOMDP <: POMDP{SpillpointInjectionState, Tuple{Symbol, Float64}, AbstractArray}
 	Δt = .1
 	injection_rates = [0.005, 0.01, 0.02]
@@ -19,12 +31,53 @@ end
 	exited_reward = -10000
 	trapped_reward = 100
 	s0_dist = SubsurfaceDistribution()
+	s_ref_MDP = nothing 
+end
+
+# @with_kw struct SpillpointInjectionMDP <: MDP{SpillpointInjectionState, Tuple{Symbol, Float64}}
+# 	Δt = .1
+# 	injection_rates = [0.005, 0.01, 0.02]
+# 	obs_locations = collect(0:0.2:1)
+# 	obs_noise_std = 0.02
+# 	obs_reward = -.01
+# 	exited_reward = -10000
+# 	trapped_reward = 100
+# 	s0_dist = SubsurfaceDistribution()
+# 	geo_surface_number = 
+# end
+
+function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64}, s::SpillpointInjectionState, mdp::SpillpointInjectionPOMDP)
+    return Float64[s.v_trapped+s.v_exited, s.injection_rate, s.stop]
+end
+
+function POMDPs.convert_s(::Type{SpillpointInjectionState}, v::AbstractVector{Float64}, mdp::SpillpointInjectionPOMDP)
+    
+	polys, v_trapped, v_exited = inject(mdp.s_ref_MDP.m, mdp.s_ref_MDP.sr, v[1])
+
+	return SpillpointInjectionState(
+	mdp.s_ref_MDP.m,
+	mdp.s_ref_MDP.sr,
+	mdp.s_ref_MDP.x_inj,
+	polys ,
+	v_trapped ,
+	v_exited ,
+	v[2] ,
+	[] ,
+	convert(Bool, v[3]) 
+	)
+
 end
 
 function POMDPs.actions(m::SpillpointInjectionPOMDP)
 	injection_actions = [(:inject, val) for val in m.injection_rates]
 	observation_actions = [(:observe, pos) for pos in m.obs_locations]
 	[(:stop, 0.0), injection_actions..., observation_actions...]
+end
+
+function POMDPs.actionindex(m::SpillpointInjectionPOMDP, a)
+
+	findfirst(actions(m).== [a])
+
 end
 
 function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG)
@@ -42,7 +95,8 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	else
 		@error "unrecognized action: $(a)"
 	end
-	
+	# cum injected
+	# polys, v_trapped, v_exited = inject(s.m, s.sr, cum_injected)
 	total_injected = s.v_trapped + s.v_exited + pomdp.Δt * injection_rate
 	polys, v_trapped, v_exited = inject(s.m, s.sr, total_injected)
 	

@@ -51,11 +51,9 @@ function POMDPs.convert_s(::Type{GridWorldState}, v::AbstractVector{Float64}, md
 end
 
 
-aa = convert_s(::Type{V} where V <: AbstractVector{Float64},::S,::P)
 
 s=GridWorldState(4,3)
-V = AbstractVector{Float64}
-extracted_vector = POMDPs.convert_s(V,s,mdp)
+extracted_vector = POMDPs.convert_s(AbstractVector{Float64},s,mdp)
 
 
 s_reconstructed = convert_s(GridWorldState, extracted_vector, mdp)

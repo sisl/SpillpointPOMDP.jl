@@ -7,7 +7,7 @@ module SpillpointAnalysis
 	using Parameters
 	using Distributions
 	using LinearAlgebra
-	using POMDPModelTools
+	using POMDPTools
 	using Plots
 	using Random
 
@@ -16,12 +16,12 @@ module SpillpointAnalysis
 
 	export inject
 	include("spillpoint.jl")
-
-	export SubsurfaceDistribution
-	include("beliefs.jl")
-
-	export SpillpointInjectionPOMDP
+	
+	export SpillpointInjectionPOMDP, SpillpointInjectionState
 	include("pomdp.jl")
+
+	export SubsurfaceDistribution, perturb_surface
+	include("beliefs.jl")
 
 end
 

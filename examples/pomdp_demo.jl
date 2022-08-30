@@ -2,14 +2,13 @@ using SpillpointAnalysis
 using Plots
 using Distributions
 using POMDPs
-using POMDPModelTools
+using POMDPTools
 using POMCPOW
-using POMDPSimulators
 using ParticleFilters
-using POMDPPolicies
 using D3Trees
+include("resamplers.jl")
 
-function plot_belief(b; title)
+function plot_belief(s0, b; title="belief")
    plt = plot(title=title)
    for p in b.particles
        plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
@@ -21,45 +20,22 @@ end
 ## Playing around with the POMDP
 
 # Initialize the pomdp
-pomdp = SpillpointInjectionPOMDP()
-
-# Plot the belief and the ground truth state
-b = initialstate(pomdp)
-s0 = rand(b)
-
-# Plot the belief
-plot_belief(b)
-
-# Here are the possible actions
-as = actions(pomdp)
-
-# We can call gen to start injecting
-sp1, o1, r1 = gen(pomdp, s0, (:inject, 0.1))
-
-# The observation is initially empty
-@assert o1 == []
-
-# We can then call gen to place an observation well at x=0.6
-sp2, o2, r2 = gen(pomdp, sp1, (:observe, 0.6))
-
-# We can see the observation well and the injected CO2 by rendering
-render(pomdp, sp2, "")
-
-# The resulting observations gives a noisy estimate of the amount of CO2 below
-o2
-
-## Solving the POMDP
+pomdp = SpillpointInjectionPOMDP(exited_reward=-100, sat_noise_std=0.01)
 
 # Setup and run the solver
-solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=true)
+solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(2.0), tree_in_info=true)
 planner = solve(solver, pomdp)
 
-
-
-s = s0
-up = BootstrapFilter(pomdp, 100)
+s0 = rand(initialstate(pomdp))
+s = deepcopy(s0)
+# up = BootstrapFilter(pomdp, 100)
+up = BasicParticleFilter(pomdp, PerturbationResampler(LowVarianceResampler(100), perturb_surface), 100)
 b0 = initialize_belief(up, initialstate(pomdp))
 b = deepcopy(b0)
+
+
+# Plot the belief
+plot_belief(s, b0)
 
 renders = []
 belief_plots = []
@@ -75,7 +51,7 @@ while !isterminal(pomdp, s)
    println("observation: ", o)
    b, bi = update_info(up, b, a, o)
    s = deepcopy(sp)
-   push!(belief_plots, plot_belief(b, title="timestep: $i"))
+   push!(belief_plots, plot_belief(s0, b, title="timestep: $i"))
    i=i+1
 end
 
@@ -91,7 +67,11 @@ end
 
 gif(anim, "renders.gif", fps=2)
 
-inchrome(D3Tree(trees[1]))
+inchrome(D3Tree(trees[end]))
+
+trees
+
+belief_plots[end]
 
 
 

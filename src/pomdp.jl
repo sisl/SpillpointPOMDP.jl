@@ -14,7 +14,8 @@ end
 	Δt = .1
 	injection_rates = [0.005, 0.01, 0.02]
 	obs_locations = collect(0:0.2:1)
-	obs_noise_std = 0.02
+	sat_noise_std = 0.02
+	exited_rate_noise_std = 0.01
 	obs_reward = -.1
 	exited_reward = -10000
 	trapped_reward = 100
@@ -55,8 +56,19 @@ function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	if isempty(sp.obs_wells)
 		return Deterministic([])
 	else
-		observations = [observe_depth(sp.polys, x_well) for x_well in sp.obs_wells]
-		MvNormal(observations, Diagonal(pomdp.obs_noise_std^2 * ones(length(observations))))
+		observations = Float64[]
+		obs_stds = Float64[]
+		for x_well in sp.obs_wells
+			if x_well in [0.0, 1.0]
+				exited_rate = sp.v_exited - s.v_exited
+				push!(observations, exited_rate)
+				push!(obs_stds, pomdp.exited_rate_noise_std)
+			else
+				push!(observations, observe_depth(sp.polys, x_well))
+				push!(obs_stds, pomdp.sat_noise_std)
+			end
+		end
+		return MvNormal(observations, Diagonal(obs_stds.^2))
 	end
 end
 
@@ -74,10 +86,10 @@ POMDPs.isterminal(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState) = s.
 
 POMDPs.initialstate(m::SpillpointInjectionPOMDP) = m.s0_dist
 
-function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; timestep=nothing)
+function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; timestep=nothing)
 	poly, v_trapped, v_exited = inject(s.m, s.sr, s.v_trapped+s.v_exited)
 	x, h = s.m.x, s.m.h
-	p3 = plot(x, h, legend = :topleft, label="", )
+	p3 = plot(x, h, legend = :topleft, label="", yrange=(0,1.0))
 	# for i in 1:length(x)
 	# 	scatter!([x[i]], [h[i]], color=s.m.SR[i], label="")
 	# end
@@ -103,5 +115,5 @@ function POMDPModelTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInject
 	plot(p3, p4, size=(900,300))
 end
 
-POMDPModelTools.render(m::SpillpointInjectionPOMDP, step; kwargs...) = render(m, step[:s], step[:a])
+POMDPTools.render(m::SpillpointInjectionPOMDP, step; kwargs...) = render(m, step[:s], step[:a])
 

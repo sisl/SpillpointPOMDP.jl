@@ -117,15 +117,16 @@ struct SpillpointMesh
 	USR		# Upslope spill region index
 	SRB		# Spill region bound (indices of SRs that leak)
 	ρ		# Porosity
+	params  # Parameters used to construct h(x)
 end
 
-function SpillpointMesh(x, h, ρ)
+function SpillpointMesh(x, h, ρ; params=[])
 	G = graph_1d(length(x))
 	SR, UB = spill_regions(G, h)
 	SRE, USR = spill_region_connectivity(G, SR, h)
 	SRB = [SR[1], SR[end]]
 	
-	SpillpointMesh(x, h, G, SR, UB, SRE, USR, SRB, ρ)
+	SpillpointMesh(x, h, G, SR, UB, SRE, USR, SRB, ρ, params)
 end
 
 function spill_region(m::SpillpointMesh, x_inj)
@@ -154,6 +155,6 @@ function merge_spill_regions(m::SpillpointMesh, sr)
 	# reconstruct spill region graphs
 	SRE_new, USR_new = spill_region_connectivity(m.G, SR_new, m.h)
 	
-	SpillpointMesh(m.x, m.h, m.G, SR_new, UB_new, SRE_new, USR_new, m.SRB, m.ρ)
+	SpillpointMesh(m.x, m.h, m.G, SR_new, UB_new, SRE_new, USR_new, m.SRB, m.ρ, m.params)
 end
 

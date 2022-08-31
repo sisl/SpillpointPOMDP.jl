@@ -6,17 +6,16 @@
 	v_trapped = 0
 	v_exited = 0
 	injection_rate = 0
-	obs_wells = []
 	stop = false
 end
 
-@with_kw struct SpillpointInjectionPOMDP <: POMDP{SpillpointInjectionState, Tuple{Symbol, Float64}, AbstractArray}
+@with_kw struct SpillpointInjectionPOMDP <: POMDP{SpillpointInjectionState, Tuple{Symbol, Any}, AbstractArray}
 	Δt = .1
 	injection_rates = [0.005, 0.01, 0.02]
-	obs_locations = collect(0:0.2:1)
+	obs_configurations =[[0.1, 0.3], [0.3, 0.5], [0.5, 0.7], [0.7, 0.9], collect(0.25:0.25:0.75), collect(0.125:0.125:0.875)]
+	obs_rewards = [-.1, -.1, -.1, -.1, -.5, -1.0]
+	height_noise_std = 0.1
 	sat_noise_std = 0.02
-	exited_rate_noise_std = 0.01
-	obs_reward = -.1
 	exited_reward = -10000
 	trapped_reward = 100
 	s0_dist = SubsurfaceDistribution()
@@ -24,22 +23,21 @@ end
 
 function POMDPs.actions(m::SpillpointInjectionPOMDP)
 	injection_actions = [(:inject, val) for val in m.injection_rates]
-	observation_actions = [(:observe, pos) for pos in m.obs_locations]
-	[(:stop, 0.0), injection_actions..., observation_actions...]
+	observation_actions = [(:observe, config) for config in m.obs_configurations]
+	[(:null, 0.0), (:stop, 0.0), injection_actions..., observation_actions...]
 end
 
 function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG)
 	stop = s.stop
-	obs_wells = deepcopy(s.obs_wells)
 	injection_rate = s.injection_rate
+	obs_wells = []
 
-	if a[1] == :stop
+	if a[1] in [:null, :observe]
+	elseif a[1] == :stop
 		injection_rate=0
 		stop=true
 	elseif a[1] == :inject
 		injection_rate=a[2]
-	elseif a[1] == :observe
-		obs_wells = [obs_wells..., a[2]]
 	else
 		@error "unrecognized action: $(a)"
 	end
@@ -47,37 +45,54 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	total_injected = s.v_trapped + s.v_exited + pomdp.Δt * injection_rate
 	polys, v_trapped, v_exited = inject(s.m, s.sr, total_injected)
 	
-	sp = SpillpointInjectionState(s; polys, v_trapped, v_exited, obs_wells, stop, injection_rate)
+	sp = SpillpointInjectionState(s; polys, v_trapped, v_exited, stop, injection_rate)
 	
 	return (sp=sp, o=rand(observation(pomdp, s, a, sp)), r=reward(pomdp, s, a, sp))
 end
 
 function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
-	if isempty(sp.obs_wells)
-		return Deterministic([])
+	# Check for leakage on either side
+	if isempty(sp.polys)
+		exited = [Bernoulli(0), Bernoulli(0)]
 	else
-		observations = Float64[]
-		obs_stds = Float64[]
-		for x_well in sp.obs_wells
-			if x_well in [0.0, 1.0]
-				exited_rate = sp.v_exited - s.v_exited
-				push!(observations, exited_rate)
-				push!(obs_stds, pomdp.exited_rate_noise_std)
-			else
-				push!(observations, observe_depth(sp.polys, x_well))
-				push!(obs_stds, pomdp.sat_noise_std)
-			end
+		xleft = minimum([p[1] for p in points(sp.polys[1])])
+		xright = maximum([p[1] for p in points(sp.polys[end])])
+		if sp.v_exited == 0
+			exited = [Bernoulli(0), Bernoulli(0)]
+		elseif sp.v_exited > 0 && xleft ≈ s.m.x[2]
+			exited = [Bernoulli(1), Bernoulli(0)]
+		elseif sp.v_exited > 0 && xright ≈ s.m.x[end-1]
+			exited = [Bernoulli(0), Bernoulli(1)]
+		else
+			@error string("exited: ", sp.v_exited, " xleft: ", xleft, " xright ", xright)
 		end
-		return MvNormal(observations, Diagonal(obs_stds.^2))
 	end
+	
+	# Construct distributions
+	if a[1] == :observe
+		dists = []
+		for x_well in a[2]
+			height, thickness = observe_depth(sp.polys, x_well)
+			push!(dists, Normal(height, pomdp.height_noise_std))
+			push!(dists, Normal(thickness, pomdp.sat_noise_std))
+		end
+		return product_distribution([exited..., dists...])
+	else
+		return product_distribution(exited)
+	end
+
 end
 
 function POMDPs.reward(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	Δexited = sp.v_exited - s.v_exited
 	Δtrapped = sp.v_trapped - s.v_trapped
-	new_well = a[1] == :observe
+	if a[1] == :observe
+		obs_reward = pomdp.obs_rewards[findfirst([a[2]] .== pomdp.obs_configurations)]
+	else
+		obs_reward = 0
+	end
 	
-	pomdp.exited_reward*Δexited + pomdp.trapped_reward*Δtrapped + pomdp.obs_reward*new_well
+	pomdp.exited_reward*Δexited + pomdp.trapped_reward*Δtrapped + obs_reward
 end
 
 POMDPs.discount(::SpillpointInjectionPOMDP) = 0.99
@@ -104,10 +119,10 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 		title = string(title, " timestep: $timestep")
 	end
 	plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title=title)
-	obs_label = "" #"Observation"
-	for o in s.obs_wells
-		plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue, label=obs_label)
-		obs_label = ""
+	if !isnothing(a) && a[1] == :observe
+		for o in a[2]
+			plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue)
+		end
 	end
 	
 	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")

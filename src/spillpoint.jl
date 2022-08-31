@@ -111,9 +111,9 @@ function observe_depth(polygons, x_obs)
 			top_pts = [lpts[argmax([p[2] for p in lpts])], 
 					   rpts[argmax([p[2] for p in rpts])]]
 			ystart = get_intersection(top_pts..., vline...)[2]
-			return ystart - ymin
+			return ystart, ystart - ymin
 		end
 	end
-	0
+	0, 0
 end
 

@@ -20,10 +20,10 @@ end
 ## Playing around with the POMDP
 
 # Initialize the pomdp
-pomdp = SpillpointInjectionPOMDP(exited_reward=-100, sat_noise_std=0.01)
+pomdp = SpillpointInjectionPOMDP(exited_reward=-1000, sat_noise_std=0.01)
 
 # Setup and run the solver
-solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(2.0), tree_in_info=true)
+solver = POMCPOWSolver(tree_queries=300, criterion=MaxUCB(2.0), tree_in_info=true, estimate_value=0)
 planner = solve(solver, pomdp)
 
 s0 = rand(initialstate(pomdp))
@@ -42,18 +42,22 @@ belief_plots = []
 trees=[]
 i=0
 
+ret = 0
 while !isterminal(pomdp, s)
    a, ai = action_info(planner, b)
    push!(trees, ai[:tree])
    println("action: ", a)
    sp, o, r = gen(pomdp, s, a)
-   push!(renders, render(pomdp, sp, timestep=i))
+   ret += r
+   push!(renders, render(pomdp, sp, a, timestep=i))
    println("observation: ", o)
    b, bi = update_info(up, b, a, o)
    s = deepcopy(sp)
    push!(belief_plots, plot_belief(s0, b, title="timestep: $i"))
    i=i+1
 end
+
+ret
 
 anim = @animate for p in belief_plots
    plot(p)

@@ -1,7 +1,7 @@
 @with_kw mutable struct SpillpointInjectionState
 	m::SpillpointMesh
 	sr
-	x_inj
+	x_inj = nothing
 	polys = []
 	v_trapped = 0
 	v_exited = 0
@@ -11,9 +11,12 @@ end
 
 @with_kw struct SpillpointInjectionPOMDP <: POMDP{SpillpointInjectionState, Tuple{Symbol, Any}, AbstractArray}
 	Δt = .1
-	injection_rates = [0.005, 0.01, 0.02]
-	obs_configurations =[[0.1, 0.3], [0.3, 0.5], [0.5, 0.7], [0.7, 0.9], collect(0.25:0.25:0.75), collect(0.125:0.125:0.875)]
-	obs_rewards = [-.1, -.1, -.1, -.1, -.5, -1.0]
+	drill_locations = collect(0.1:0.1:0.9)
+	injection_rates = [0.01, 0.07]
+	# obs_configurations =[[0.1, 0.3], [0.3, 0.5], [0.5, 0.7], [0.7, 0.9], collect(0.25:0.25:0.75), collect(0.125:0.125:0.875)]
+	obs_configurations =[collect(0.25:0.25:0.75), collect(0.125:0.125:0.875)]
+	# obs_rewards = [-.1, -.1, -.1, -.1, -.5, -1.0]
+	obs_rewards = [-.1, -.5]
 	height_noise_std = 0.1
 	sat_noise_std = 0.02
 	exited_reward = -10000
@@ -21,18 +24,27 @@ end
 	s0_dist = SubsurfaceDistribution()
 end
 
-function POMDPs.actions(m::SpillpointInjectionPOMDP)
-	injection_actions = [(:inject, val) for val in m.injection_rates]
-	observation_actions = [(:observe, config) for config in m.obs_configurations]
-	[(:null, 0.0), (:stop, 0.0), injection_actions..., observation_actions...]
+function POMDPs.actions(m::SpillpointInjectionPOMDP, belief)
+	if isnothing(rand(belief).x_inj)
+		return [(:drill, val) for val in m.drill_locations]
+	else
+		injection_actions = [(:inject, val) for val in m.injection_rates]
+		observation_actions = [(:observe, config) for config in m.obs_configurations]
+		return [(:stop, 0.0), injection_actions..., observation_actions...]
+	end
 end
 
 function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG)
 	stop = s.stop
 	injection_rate = s.injection_rate
 	obs_wells = []
+	x_inj = s.x_inj
+	sr = s.sr
 
-	if a[1] in [:null, :observe]
+	if a[1] == :observe
+	elseif a[1] == :drill
+		x_inj = a[2]
+		sr = spill_region(s.m, x_inj)
 	elseif a[1] == :stop
 		injection_rate=0
 		stop=true
@@ -45,7 +57,7 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	total_injected = s.v_trapped + s.v_exited + pomdp.Δt * injection_rate
 	polys, v_trapped, v_exited = inject(s.m, s.sr, total_injected)
 	
-	sp = SpillpointInjectionState(s; polys, v_trapped, v_exited, stop, injection_rate)
+	sp = SpillpointInjectionState(s; sr, x_inj, polys, v_trapped, v_exited, stop, injection_rate)
 	
 	return (sp=sp, o=rand(observation(pomdp, s, a, sp)), r=reward(pomdp, s, a, sp))
 end
@@ -69,7 +81,11 @@ function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	end
 	
 	# Construct distributions
-	if a[1] == :observe
+	if a[1] == :drill
+		drill_loc = findfirst(s.m.x .>= a[2])
+		topsurface = s.m.h[drill_loc]
+		return product_distribution([exited..., Normal(topsurface, 0.001)])
+	elseif a[1] == :observe
 		dists = []
 		for x_well in a[2]
 			height, thickness = observe_depth(sp.polys, x_well)

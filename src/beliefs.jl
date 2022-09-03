@@ -1,6 +1,6 @@
 @with_kw struct SubsurfaceDistribution
 	x = collect(0:0.02:1)
-	x_inj = 0.25
+	x_inj = nothing
 	ρ = Distributions.Uniform(0.5, 1.5)
 	lobe_height = Distributions.Uniform(0.05, 0.25)
 	center_height = Distributions.Uniform(0.05, 0.5)
@@ -24,7 +24,8 @@ function Base.rand(ssd::SubsurfaceDistribution)
 	m = construct_surface(ssd.x, rand(ssd.lobe_height), rand(ssd.center_height), rand(ssd.linear_amplitude), rand(ssd.ρ))
 
 	# determine the injection spill region
-	sr = spill_region(m, ssd.x_inj)
+	# sr = spill_region(m, ssd.x_inj)
+	sr = nothing
 	
 	SpillpointInjectionState(;m, sr, ssd.x_inj)
 end

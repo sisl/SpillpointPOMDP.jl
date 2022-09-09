@@ -88,7 +88,10 @@ Threads.@threads for trial=1:Ntrials
 			b = initialize_belief(up, initialstate(pomdp))
 
 			renders = []
-			belief_plots = [plot_belief(b, s0, title="timestep: 0")]
+			beliefs = [b]
+			actions = []
+			states = [s]
+			# belief_plots = [plot_belief(b, s0, title="timestep: 0")]
 			# trees=[]
 			i=1
 			ret = 0
@@ -98,30 +101,34 @@ Threads.@threads for trial=1:Ntrials
 				sp, o, r = gen(pomdp, s, a)
 				ret += r
 				push!(renders, render(pomdp, sp, a, timestep=i))
+				push!(actions, a)
+				push!(states, sp)
 				println("action: $a, observation: $o")
 				b = update(up, b, a, o)
 				s = deepcopy(sp)
-				push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
+				# push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
+				push!(beliefs, b)
 				i=i+1
 				if i > 50
 					break
 				end
 			end
 
-			ret
-			BSON.@save "$dir/return.bson" ret
+			# ret
+			results = Dict("states"=>states, "actions"=>actions, "return"=>ret, "beliefs"=>beliefs)
+			BSON.@save "$dir/results.bson" results
 
-			anim = @animate for p in belief_plots
-			   plot(p)
-			end
-
-			gif(anim, "$dir/beliefs.gif", fps=2)
-
-			anim = @animate for p in renders
-			   plot(p)
-			end
-
-			gif(anim, "$dir/renders.gif", fps=2)
+			# anim = @animate for p in belief_plots
+			#    plot(p)
+			# end
+			# 
+			# gif(anim, "$dir/beliefs.gif", fps=2)
+			# 
+			# anim = @animate for p in renders
+			#    plot(p)
+			# end
+			# 
+			# gif(anim, "$dir/renders.gif", fps=2)
 		end
 	end
 	catch e

@@ -29,16 +29,21 @@ end
 	# obs_configurations =[[0.1, 0.3], [0.3, 0.5], [0.5, 0.7], [0.7, 0.9], collect(0.25:0.25:0.75), collect(0.125:0.125:0.875)]
 	obs_configurations =[collect(0.25:0.25:0.75), collect(0.125:0.125:0.875)]
 	# obs_rewards = [-.1, -.1, -.1, -.1, -.5, -1.0]
-	obs_rewards = [-.1, -.5]
+	obs_rewards = [-.3, -.7]
 	height_noise_std = 0.1
 	sat_noise_std = 0.02
-	exited_reward = -10000
+	exited_reward_amount = -10000
+	exited_reward_binary = -10
 	trapped_reward = 100
 	s0_dist = SubsurfaceDistribution()
 end
 
 function POMDPs.actions(m::SpillpointInjectionPOMDP, belief)
-	if isnothing(rand(belief).x_inj)
+	actions(m, rand(belief))
+end
+
+function POMDPs.actions(m::SpillpointInjectionPOMDP, state::SpillpointInjectionState)
+	if isnothing(state.x_inj)
 		return [(:drill, val) for val in m.drill_locations]
 	else
 		injection_actions = [(:inject, val) for val in m.injection_rates]
@@ -125,8 +130,9 @@ function POMDPs.reward(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	else
 		obs_reward = 0
 	end
+	exited_penalty = pomdp.exited_reward_binary * (Δexited > eps(Float32))
 	
-	pomdp.exited_reward*Δexited + pomdp.trapped_reward*Δtrapped + obs_reward
+	pomdp.exited_reward_amount*Δexited + pomdp.trapped_reward*Δtrapped + obs_reward + exited_penalty
 end
 
 POMDPs.discount(::SpillpointInjectionPOMDP) = 0.99

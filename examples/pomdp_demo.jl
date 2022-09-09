@@ -6,9 +6,12 @@ using POMDPTools
 using POMCPOW
 using ParticleFilters
 using D3Trees
-using BSON
+using JLD2
 using Random
+using MCTS
+include("utils.jl")
 
+USE_PLOT = false
 Nstates = 10
 max_steps = 50
 Ntrials = 100
@@ -16,14 +19,15 @@ Ntrials = 100
 Random.seed!(0)
 sample_pomdp = SpillpointInjectionPOMDP()
 initial_states = [rand(initialstate(sample_pomdp)) for i=1:Nstates]
-updaters = [:basic, :SIR]
+solvers = [:random, :no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
 
 # trial = parse(Int, ARGS[1])
 # println("running trial $trial")
 # Random.seed!(trial)
 
-exited_reward_options = [-1000, -10000]
-obs_rewards_options = [[-.1, -.5], [-1, -5]]
+exited_reward_amount_options = [-1000, -10000]
+exited_reward_binary_options = [-10]
+obs_rewards_options = [[-.3, -.7], [-3, -7]]
 height_noise_std_options = [0.01, 0.1, 1]
 sat_noise_std_options = [0.01, 0.1, 1]
 exploration_coefficient_options = [2, 20]
@@ -31,15 +35,17 @@ alpha_observation_options = [0.1, 0.3, 0.7]
 k_obsservation_options=[1,10]
 tree_queries_options=[1000, 5000]
 
+
+## Run the experiments
 try mkdir("results") catch end
 
-Threads.@threads for trial in 1:Ntrials
-
+for trial in 1:Ntrials
 	println("starting trial $trial")
 	trialdir = "results/trial_$trial"
 	try mkdir(trialdir) catch end
 
-	exited_reward = rand(exited_reward_options)
+	exited_reward_amount = rand(exited_reward_amount_options)
+	exited_reward_binary = rand(exited_reward_binary_options)
 	obs_rewards = rand(obs_rewards_options)
 	height_noise_std = rand(height_noise_std_options)
 	sat_noise_std = height_noise_std
@@ -48,7 +54,8 @@ Threads.@threads for trial in 1:Ntrials
 	k_observation=rand(k_obsservation_options)
 	tree_queries=rand(tree_queries_options)
 
-	params = Dict("exited_reward"=>exited_reward, 
+	params = Dict("exited_reward_amount"=>exited_reward_amount, 
+					  "exited_reward_binary" => exited_reward_binary,
 					  "obs_rewards"=>obs_rewards, 
 					  "height_noise_std"=>height_noise_std, 
 					  "sat_noise_std"=>sat_noise_std, 
@@ -56,91 +63,132 @@ Threads.@threads for trial in 1:Ntrials
 					  "alpha_observation"=>alpha_observation,
 					  "k_observation"=>k_observation,
 					  "tree_queries"=>tree_queries)
-	BSON.@save string(trialdir, "/params.bson") params	  
-
+	JLD2.save("$trialdir/params.jld2", params)
 
 	# Initialize the pomdp
-	pomdp = SpillpointInjectionPOMDP(;exited_reward, obs_rewards, height_noise_std, sat_noise_std)
+	pomdp = SpillpointInjectionPOMDP(;exited_reward_amount, exited_reward_binary, obs_rewards, height_noise_std, sat_noise_std)
 
-	for updater in updaters
-		println("kicking off updater: $updater")
-		updater_dir = "$trialdir/$updater"
-		try mkdir(updater_dir) catch end
+	for solver_type in solvers
+		println("kicking off solver: $solver_type")
+		solver_dir = "$trialdir/$solver_type"
+		try mkdir(solver_dir) catch end
 		for (si, s0) in enumerate(initial_states)
-			dir = "$updater_dir/state_$si"
-			try
-				try mkdir(dir) catch end
-				s = deepcopy(s0)
-				println("kicking off state: $si")
-				# Setup and run the solver
-				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+			println("kicking off state: $si")
+			dir = "$solver_dir/state_$si"
+			
+			if solver_type == :random
+				random_policy(b, i, observations, s) = begin
+					if length(observations)>0 && sum(observations[end][1:2]) > 0
+						return (:stop, 0.0)
+					else
+						return rand(actions(pomdp, s))
+					end
+				end
+				simulate_and_save(pomdp, random_policy, s0, nothing, nothing, dir, false)
+				
+			elseif solver_type == :no_uncertainty
+				up = SpillpointAnalysis.SIRParticleFilter(
+					model=pomdp, 
+					N=200, 
+					state2param=SpillpointAnalysis.state2params, 
+					param2state=SpillpointAnalysis.params2state,
+					N_samples_before_resample=100,
+					clampfn=SpillpointAnalysis.clamp_distribution,
+					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					elite_frac=0.3
+				)
+				b0 = initialize_belief(up, initialstate(pomdp))
+				a = (:drill, 0.5)
+				s, o, r = gen(pomdp, s0, a)
+				b1 = update(up, b0, a, o)
+				sguess = rand(b1)
+
+				up = BootstrapFilter(pomdp, 1)
+				b = ParticleCollection([sguess])
+
+				solver = MCTSSolver(n_iterations=tree_queries, depth=20, exploration_constant=exploration_coefficient, estimate_value=0)
 				planner = solve(solver, pomdp)
 
-				if updater == :basic 
-					up = BootstrapFilter(pomdp, 2000)
-				elseif updater == :SIR
-					up = SpillpointAnalysis.SIRParticleFilter(
-						model=pomdp, 
-						N=200, 
-						state2param=SpillpointAnalysis.state2params, 
-						param2state=SpillpointAnalysis.params2state,
-						N_samples_before_resample=100,
-					    clampfn=SpillpointAnalysis.clamp_distribution,
-						prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-						elite_frac=0.3
-					)
-				else
-					@error "Unrecognized updater $updater"
+				no_uncertainty_policy(b, i, observations, args...) = begin
+					if length(observations)>0 && sum(observations[end][1:2]) > 0
+						return (:stop, 0.0)
+					else
+						s_root = rand(b)
+						i==1 && return a
+						return action(planner, s_root)
+					end
 				end
+				simulate_and_save(pomdp, no_uncertainty_policy, s0, b, up, dir, true)
+			elseif solver_type == :fixed_schedule
+				up = SpillpointAnalysis.SIRParticleFilter(
+					model=pomdp, 
+					N=200, 
+					state2param=SpillpointAnalysis.state2params, 
+					param2state=SpillpointAnalysis.params2state,
+					N_samples_before_resample=100,
+					clampfn=SpillpointAnalysis.clamp_distribution,
+					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					elite_frac=0.3
+				)
+				b0 = initialize_belief(up, initialstate(pomdp))
+				a = (:drill, 0.5)
 
-				b = initialize_belief(up, initialstate(pomdp))
-
-				renders = Any[]
-				beliefs = Any[b]
-				actions = Any[]
-				states = Any[s]
-				# belief_plots = [plot_belief(b, s0, title="timestep: 0")]
-				# trees=[]
-				i=1
-				ret = 0
-				while !isterminal(pomdp, s)
-					a, ai = action_info(planner, b)
-					# push!(trees, ai[:tree])
-					sp, o, r = gen(pomdp, s, a)
-					ret += r
-					push!(renders, render(pomdp, sp, a, timestep=i))
-					push!(actions, a)
-					push!(states, sp)
-					println("action: $a, observation: $o")
-					b = update(up, b, a, o)
-					s = deepcopy(sp)
-					# push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
-					push!(beliefs, b)
-					i=i+1
-					if i > max_steps
-						break
+				fixed_schedule_policy(b, i, observations, args...) = begin
+					if length(observations)>0 && sum(observations[end][1:2]) > 0
+						return (:stop, 0.0)
+					else
+						i==1 && return a
+						i % 3 == 0 && return (:observe, pomdp.obs_configurations[end])
+						
+						for injection_rate in reverse(pomdp.injection_rates)
+							all_good = true
+							for i=1:10
+								s = rand(b)
+								sp, o, r = gen(pomdp, s, (:inject, injection_rate))
+								if r < 0 
+									all_good = false
+									println(" found leakage w/ injection rate: $injection_rate")
+									break
+								end
+							end
+							if all_good
+								return (:inject, injection_rate)
+							end
+						end
+						
+						return (:stop, 0.0)
 					end
 				end
 
-				# ret
-				results = Dict("states"=>states, "actions"=>actions, "return"=>ret, "beliefs"=>beliefs)
-				BSON.@save "$dir/results.bson" results
-
-				# anim = @animate for p in belief_plots
-				#    plot(p)
-				# end
-				# 
-				# gif(anim, "$dir/beliefs.gif", fps=2)
-				# 
-				# anim = @animate for p in renders
-				#    plot(p)
-				# end
-				# 
-				# gif(anim, "$dir/renders.gif", fps=2)
-			catch e
-				BSON.@save "$dir/failure.bson" e
+				simulate_and_save(pomdp, fixed_schedule_policy, s0, b0, up, dir, true)
+			elseif solver_type == :POMCPOW_basic
+				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+				planner = solve(solver, pomdp)
+				up = BootstrapFilter(pomdp, 2000)
+				b0 = initialize_belief(up, initialstate(pomdp))
+				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true)
+			elseif solver_type == :POMCPOW_SIR
+				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+				planner = solve(solver, pomdp)
+				up = SpillpointAnalysis.SIRParticleFilter(
+					model=pomdp, 
+					N=200, 
+					state2param=SpillpointAnalysis.state2params, 
+					param2state=SpillpointAnalysis.params2state,
+					N_samples_before_resample=100,
+					clampfn=SpillpointAnalysis.clamp_distribution,
+					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					elite_frac=0.3
+				)
+				b0 = initialize_belief(up, initialstate(pomdp))
+				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true)
+			else
+				@error "unrecognized solver type: $solver_type"
 			end
 		end
 	end
 end
+
+
+inchrome(D3Tree(alltrees[1]))
 

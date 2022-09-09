@@ -36,3 +36,4 @@ b1 = update(up, b0, a1, o1)
 plot_belief(b1_basic, s0)
 plot_belief(b1, s1)
 
+

@@ -2,7 +2,9 @@ function get_intersection(p1, p2, p3, p4)
 	a = LineSegment(p1, p2)
 	b = LineSegment(p3, p4)
 	pt = intersection(a,b)
-	@assert !isempty(pt)
+	if isempty(pt)
+		@error "Found no intersection with points: $p1, $p2, $p3, $p4"
+	end
 
 	return pt.element
 end
@@ -54,9 +56,9 @@ function get_depth(m::SpillpointMesh, sr, v)
 		return lo
 	end
 
-	Optim.minimizer(optimize(vol_diff, lo, m.UB[sr]))
+	res = optimize(vol_diff, lo, m.UB[sr], rel_tol=1e-2, abs_tol=1e-3)
+	Optim.minimizer(res)
 end
-
 
 function inject(m::SpillpointMesh, sr, v)
 	v = v / m.ρ

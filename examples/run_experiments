@@ -1,3 +1,0 @@
-for (( i=0; i<50; i++ )); do
-   julia examples/pomdp_demo.jl $i &
-done

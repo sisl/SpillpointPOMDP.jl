@@ -10,16 +10,17 @@ using BSON
 using Random
 
 Nstates = 10
-max_steps=50
+max_steps = 50
+Ntrials = 100
 
 Random.seed!(0)
 sample_pomdp = SpillpointInjectionPOMDP()
 initial_states = [rand(initialstate(sample_pomdp)) for i=1:Nstates]
 updaters = [:basic, :SIR]
 
-trial = parse(Int, ARGS[1])
-println("running trial $trial")
-Random.seed!(trial)
+# trial = parse(Int, ARGS[1])
+# println("running trial $trial")
+# Random.seed!(trial)
 
 exited_reward_options = [-1000, -10000]
 obs_rewards_options = [[-.1, -.5], [-1, -5]]
@@ -32,111 +33,114 @@ tree_queries_options=[1000, 5000]
 
 try mkdir("results") catch end
 
-println("starting trial $trial")
-trialdir = "results/trial_$trial"
-try mkdir(trialdir) catch end
+Threads.@threads for trial in 1:Ntrials
 
-exited_reward = rand(exited_reward_options)
-obs_rewards = rand(obs_rewards_options)
-height_noise_std = rand(height_noise_std_options)
-sat_noise_std = height_noise_std
-exploration_coefficient=rand(exploration_coefficient_options)
-alpha_observation=rand(alpha_observation_options)
-k_observation=rand(k_obsservation_options)
-tree_queries=rand(tree_queries_options)
+	println("starting trial $trial")
+	trialdir = "results/trial_$trial"
+	try mkdir(trialdir) catch end
 
-params = Dict("exited_reward"=>exited_reward, 
-				  "obs_rewards"=>obs_rewards, 
-				  "height_noise_std"=>height_noise_std, 
-				  "sat_noise_std"=>sat_noise_std, 
-				  "exploration_coefficient"=>exploration_coefficient,
-				  "alpha_observation"=>alpha_observation,
-				  "k_observation"=>k_observation,
-				  "tree_queries"=>tree_queries)
-BSON.@save string(trialdir, "/params.bson") params	  
+	exited_reward = rand(exited_reward_options)
+	obs_rewards = rand(obs_rewards_options)
+	height_noise_std = rand(height_noise_std_options)
+	sat_noise_std = height_noise_std
+	exploration_coefficient=rand(exploration_coefficient_options)
+	alpha_observation=rand(alpha_observation_options)
+	k_observation=rand(k_obsservation_options)
+	tree_queries=rand(tree_queries_options)
+
+	params = Dict("exited_reward"=>exited_reward, 
+					  "obs_rewards"=>obs_rewards, 
+					  "height_noise_std"=>height_noise_std, 
+					  "sat_noise_std"=>sat_noise_std, 
+					  "exploration_coefficient"=>exploration_coefficient,
+					  "alpha_observation"=>alpha_observation,
+					  "k_observation"=>k_observation,
+					  "tree_queries"=>tree_queries)
+	BSON.@save string(trialdir, "/params.bson") params	  
 
 
-# Initialize the pomdp
-pomdp = SpillpointInjectionPOMDP(;exited_reward, obs_rewards, height_noise_std, sat_noise_std)
+	# Initialize the pomdp
+	pomdp = SpillpointInjectionPOMDP(;exited_reward, obs_rewards, height_noise_std, sat_noise_std)
 
-for updater in updaters
-	println("kicking off updater: $updater")
-	updater_dir = "$trialdir/$updater"
-	try mkdir(updater_dir) catch end
-	for (si, s0) in enumerate(initial_states)
-		dir = "$updater_dir/state_$si"
-		# try
-			try mkdir(dir) catch end
-			s = deepcopy(s0)
-			println("kicking off state: $si")
-			# Setup and run the solver
-			solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
-			planner = solve(solver, pomdp)
+	for updater in updaters
+		println("kicking off updater: $updater")
+		updater_dir = "$trialdir/$updater"
+		try mkdir(updater_dir) catch end
+		for (si, s0) in enumerate(initial_states)
+			dir = "$updater_dir/state_$si"
+			try
+				try mkdir(dir) catch end
+				s = deepcopy(s0)
+				println("kicking off state: $si")
+				# Setup and run the solver
+				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+				planner = solve(solver, pomdp)
 
-			if updater == :basic 
-				up = BootstrapFilter(pomdp, 2000)
-			elseif updater == :SIR
-				up = SpillpointAnalysis.SIRParticleFilter(
-					model=pomdp, 
-					N=200, 
-					state2param=SpillpointAnalysis.state2params, 
-					param2state=SpillpointAnalysis.params2state,
-					N_samples_before_resample=100,
-				    clampfn=SpillpointAnalysis.clamp_distribution,
-					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-					elite_frac=0.3
-				)
-			else
-				@error "Unrecognized updater $updater"
-			end
-
-			b = initialize_belief(up, initialstate(pomdp))
-
-			renders = Any[]
-			beliefs = Any[b]
-			actions = Any[]
-			states = Any[s]
-			# belief_plots = [plot_belief(b, s0, title="timestep: 0")]
-			# trees=[]
-			i=1
-			ret = 0
-			while !isterminal(pomdp, s)
-				a, ai = action_info(planner, b)
-				# push!(trees, ai[:tree])
-				sp, o, r = gen(pomdp, s, a)
-				ret += r
-				push!(renders, render(pomdp, sp, a, timestep=i))
-				push!(actions, a)
-				push!(states, sp)
-				println("action: $a, observation: $o")
-				b = update(up, b, a, o)
-				s = deepcopy(sp)
-				# push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
-				push!(beliefs, b)
-				i=i+1
-				if i > max_steps
-					break
+				if updater == :basic 
+					up = BootstrapFilter(pomdp, 2000)
+				elseif updater == :SIR
+					up = SpillpointAnalysis.SIRParticleFilter(
+						model=pomdp, 
+						N=200, 
+						state2param=SpillpointAnalysis.state2params, 
+						param2state=SpillpointAnalysis.params2state,
+						N_samples_before_resample=100,
+					    clampfn=SpillpointAnalysis.clamp_distribution,
+						prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+						elite_frac=0.3
+					)
+				else
+					@error "Unrecognized updater $updater"
 				end
+
+				b = initialize_belief(up, initialstate(pomdp))
+
+				renders = Any[]
+				beliefs = Any[b]
+				actions = Any[]
+				states = Any[s]
+				# belief_plots = [plot_belief(b, s0, title="timestep: 0")]
+				# trees=[]
+				i=1
+				ret = 0
+				while !isterminal(pomdp, s)
+					a, ai = action_info(planner, b)
+					# push!(trees, ai[:tree])
+					sp, o, r = gen(pomdp, s, a)
+					ret += r
+					push!(renders, render(pomdp, sp, a, timestep=i))
+					push!(actions, a)
+					push!(states, sp)
+					println("action: $a, observation: $o")
+					b = update(up, b, a, o)
+					s = deepcopy(sp)
+					# push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
+					push!(beliefs, b)
+					i=i+1
+					if i > max_steps
+						break
+					end
+				end
+
+				# ret
+				results = Dict("states"=>states, "actions"=>actions, "return"=>ret, "beliefs"=>beliefs)
+				BSON.@save "$dir/results.bson" results
+
+				# anim = @animate for p in belief_plots
+				#    plot(p)
+				# end
+				# 
+				# gif(anim, "$dir/beliefs.gif", fps=2)
+				# 
+				# anim = @animate for p in renders
+				#    plot(p)
+				# end
+				# 
+				# gif(anim, "$dir/renders.gif", fps=2)
+			catch e
+				BSON.@save "$dir/failure.bson" e
 			end
-
-			# ret
-			results = Dict("states"=>states, "actions"=>actions, "return"=>ret, "beliefs"=>beliefs)
-			BSON.@save "$dir/results.bson" results
-
-			# anim = @animate for p in belief_plots
-			#    plot(p)
-			# end
-			# 
-			# gif(anim, "$dir/beliefs.gif", fps=2)
-			# 
-			# anim = @animate for p in renders
-			#    plot(p)
-			# end
-			# 
-			# gif(anim, "$dir/renders.gif", fps=2)
-		# catch e
-		# 	BSON.@save "$dir/failure.bson" e
-		# end
+		end
 	end
 end
 

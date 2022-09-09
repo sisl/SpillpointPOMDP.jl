@@ -13,6 +13,7 @@ Nstates = 10
 Ntrials = 1000
 
 Random.seed!(0)
+pomdp = SpillpointInjectionPOMDP(;exited_reward, obs_rewards, height_noise_std, sat_noise_std)
 initial_states = [rand(initialstate(pomdp)) for i=1:Nstates]
 updaters = [:basic, :SIR]
 

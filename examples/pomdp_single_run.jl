@@ -7,16 +7,6 @@ using POMCPOW
 using ParticleFilters
 using D3Trees
 using BSON
-include("resamplers.jl")
-
-function plot_belief(s0, b; title="belief")
-   plt = plot(title=title, ylims=(0,1))
-   for p in b.particles
-       plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
-   end
-   plot!(s0.m.x, s0.m.h, color=:red, label="ground truth")
-   plt
-end
 
 ## Playing around with the POMDP
 
@@ -29,38 +19,55 @@ planner = solve(solver, pomdp)
 
 s0 = rand(initialstate(pomdp))
 s = deepcopy(s0)
-plot_belief(s, b0)
 
-# up = BootstrapFilter(pomdp, 1000)
-up = BasicParticleFilter(pomdp, PerturbationResampler(LowVarianceResampler(1000), perturb_surface), 1000)
+# up_basic = BootstrapFilter(pomdp, 1000)
+# up = BasicParticleFilter(pomdp, PerturbationResampler(LowVarianceResampler(1000), perturb_surface), 1000)
+up = SpillpointAnalysis.SIRParticleFilter(
+	model=pomdp, 
+	N=200, 
+	state2param=SpillpointAnalysis.state2params, 
+	param2state=SpillpointAnalysis.params2state,
+	N_samples_before_resample=100,
+    clampfn=SpillpointAnalysis.clamp_distribution,
+	prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+	# use_all_prior_obs = false
+	elite_frac=0.3
+)
+
 b0 = initialize_belief(up, initialstate(pomdp))
 b = deepcopy(b0)
 
-
 # Plot the belief
-plot_belief(s, b0)
+plot_belief(b0, s)
 
 renders = []
-belief_plots = []
+belief_plots = [plot_belief(b, s0, title="timestep: 0")]
 trees=[]
-i=0
+i=1
+
+
 
 ret = 0
 while !isterminal(pomdp, s)
-   a, ai = action_info(planner, b)
-   push!(trees, ai[:tree])
-   println("action: ", a)
-   sp, o, r = gen(pomdp, s, a)
-   ret += r
-   push!(renders, render(pomdp, sp, a, timestep=i))
-   println("observation: ", o)
-   b, bi = update_info(up, b, a, o)
-   s = deepcopy(sp)
-   push!(belief_plots, plot_belief(s0, b, title="timestep: $i"))
-   i=i+1
-   if i > 50
-      break
-   end
+	a, ai = action_info(planner, b)
+	push!(trees, ai[:tree])
+	println("action: ", a)
+	sp, o, r = gen(pomdp, s, a)
+	ret += r
+	push!(renders, render(pomdp, sp, a, timestep=i))
+	println("observation: ", o)
+   	# if a[1] in [:drill, :observe]
+	t = @elapsed b = update(up, b, a, o)
+	println("belief update time: ", t)
+	# else
+		# b = update(up_basic, b, a, o)
+	# end
+	s = deepcopy(sp)
+	push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
+	i=i+1
+	if i > 50
+		break
+	end
 end
 
 ret
@@ -70,6 +77,8 @@ anim = @animate for p in belief_plots
 end
 
 gif(anim, "beliefs.gif", fps=2)
+
+belief_plots[end-1]
 
 anim = @animate for p in renders
    plot(p)
@@ -92,7 +101,7 @@ end
 
 total_exited
 
-plot_belief(s0, trees[end].root_belief)
+plot_belief(trees[end].root_belief, s0)
 
 
 solver = POMCPOWSolver(tree_queries=1000, criterion=MaxUCB(20.0), tree_in_info=true, estimate_value=0, k_observation=1, alpha_observation=0.1)

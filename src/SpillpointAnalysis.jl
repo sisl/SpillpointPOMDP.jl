@@ -10,6 +10,10 @@ module SpillpointAnalysis
 	using POMDPTools
 	using Plots
 	using Random
+	
+	## For SIRParticleFilter
+	using MultiKDE
+	using ParticleFilters
 
 	export SpillpointMesh
 	include("mesh.jl")
@@ -20,8 +24,11 @@ module SpillpointAnalysis
 	export SpillpointInjectionPOMDP, SpillpointInjectionState
 	include("pomdp.jl")
 
-	export SubsurfaceDistribution, perturb_surface
+	export SubsurfaceDistribution, perturb_surface, plot_belief
 	include("beliefs.jl")
+	
+	export SIRParticleFilter
+	include("sir_particle_filter.jl")
 
 end
 

@@ -7,121 +7,124 @@ using POMCPOW
 using ParticleFilters
 using D3Trees
 using BSON
-include("resamplers.jl")
+using Random
 
-function plot_belief(s0, b; title="belief")
-   plt = plot(title=title)
-   for p in b.particles
-       plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
-   end
-   plot!(s0.m.x, s0.m.h, color=:red, label="ground truth")
-   plt
+Nstates = 10
+Ntrials = 1000
+
+Random.seed!(0)
+initial_states = [rand(initialstate(pomdp)) for i=1:Nstates]
+updaters = [:basic, :SIR]
+
+exited_reward_options = [-1000, -10000]
+obs_rewards_options = [[-.1, -.5], [-1, -5]]
+height_noise_std_options = [0.01, 0.1, 1]
+sat_noise_std_options = [0.01, 0.1, 1]
+exploration_coefficient_options = [2, 20]
+alpha_observation_options = [0.1, 0.3, 0.7]
+k_obsservation_options=[1,10]
+tree_queries_options=[1000, 5000]
+
+try mkdir("results") catch end
+
+
+Threads.@threads for trial=1:Ntrials
+	println("starting trial $trial")
+	trialdir = "results/trial_$trial"
+	try mkdir(trialdir) catch end
+
+	exited_reward = rand(exited_reward_options)
+	obs_rewards = rand(obs_rewards_options)
+	height_noise_std = rand(height_noise_std_options)
+	sat_noise_std = height_noise_std
+	exploration_coefficient=rand(exploration_coefficient_options)
+	alpha_observation=rand(alpha_observation_options)
+	k_observation=rand(k_obsservation_options)
+	tree_queries=rand(tree_queries_options)
+
+	params = Dict("exited_reward"=>exited_reward, 
+					  "obs_rewards"=>obs_rewards, 
+					  "height_noise_std"=>height_noise_std, 
+					  "sat_noise_std"=>sat_noise_std, 
+					  "exploration_coefficient"=>exploration_coefficient,
+					  "alpha_observation"=>alpha_observation,
+					  "k_observation"=>k_observation,
+					  "tree_queries"=>tree_queries)
+   BSON.@save string(trialdir, "/params.bson") params	  
+
+	try
+	# Initialize the pomdp
+	pomdp = SpillpointInjectionPOMDP(;exited_reward, obs_rewards, height_noise_std, sat_noise_std)
+
+	for updater in updaters
+		println("kicking off updater: $updater")
+		dir = "$trialdir/$updater"
+		try mkdir(dir) catch end
+		for (si, s0) in enumerate(initial_states)
+			s = deepcopy(s0)
+			println("kicking off state: $si")
+			# Setup and run the solver
+			solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+			planner = solve(solver, pomdp)
+
+			if updater == :basic 
+				up = BootstrapFilter(pomdp, 2000)
+			elseif updater == :SIR
+				up = SpillpointAnalysis.SIRParticleFilter(
+					model=pomdp, 
+					N=200, 
+					state2param=SpillpointAnalysis.state2params, 
+					param2state=SpillpointAnalysis.params2state,
+					N_samples_before_resample=100,
+				   clampfn=SpillpointAnalysis.clamp_distribution,
+					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					elite_frac=0.3
+				)
+			else
+				@error "Unrecognized updater $updater"
+			end
+
+			b = initialize_belief(up, initialstate(pomdp))
+
+			renders = []
+			belief_plots = [plot_belief(b, s0, title="timestep: 0")]
+			# trees=[]
+			i=1
+			ret = 0
+			while !isterminal(pomdp, s)
+				a, ai = action_info(planner, b)
+				# push!(trees, ai[:tree])
+				sp, o, r = gen(pomdp, s, a)
+				ret += r
+				push!(renders, render(pomdp, sp, a, timestep=i))
+				println("action: $a, observation: $o")
+				b = update(up, b, a, o)
+				s = deepcopy(sp)
+				push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
+				i=i+1
+				if i > 50
+					break
+				end
+			end
+
+			ret
+			BSON.@save "$dir/return.bson" ret
+
+			anim = @animate for p in belief_plots
+			   plot(p)
+			end
+
+			gif(anim, "$dir/beliefs.gif", fps=2)
+
+			anim = @animate for p in renders
+			   plot(p)
+			end
+
+			gif(anim, "$dir/renders.gif", fps=2)
+		end
+	end
+	catch e
+		BSON.@save "$dir/failure.bson" e
+	end
 end
-
-## Playing around with the POMDP
-
-planning_samples = [10, 100, 1000, 10000]
-Ntrials = 10
-
-for sz in planning_samples
-   dir = "results/Nsamples_$sz"
-   try mkdir(dir) catch end
-   
-   returns = []
-   exited = []
-   trapped = []
-   for trial in 1:Ntrials
-
-      # Initialize the pomdp
-      pomdp = SpillpointInjectionPOMDP(exited_reward=-1000)
-
-      # Setup and run the solver
-      solver = POMCPOWSolver(tree_queries=sz, criterion=MaxUCB(2.0), tree_in_info=true, estimate_value=0)
-      planner = solve(solver, pomdp)
-
-      s0 = rand(initialstate(pomdp))
-      s = deepcopy(s0)
-      # up = BootstrapFilter(pomdp, 100)
-      up = BasicParticleFilter(pomdp, PerturbationResampler(LowVarianceResampler(1000), perturb_surface), 1000)
-      b0 = initialize_belief(up, initialstate(pomdp))
-      b = deepcopy(b0)
-
-
-      # Plot the belief
-      # plot_belief(s, b0)
-
-      renders = []
-      belief_plots = []
-      trees=[]
-      i=0
-
-      ret = 0
-      try
-      while !isterminal(pomdp, s)
-         a, ai = action_info(planner, b)
-         push!(trees, ai[:tree])
-         println("action: ", a)
-         sp, o, r = gen(pomdp, s, a)
-         ret += r
-         push!(renders, render(pomdp, sp, a, timestep=i))
-         println("observation: ", o)
-         b, bi = update_info(up, b, a, o)
-         s = deepcopy(sp)
-         push!(belief_plots, plot_belief(s0, b, title="timestep: $i"))
-         i=i+1
-         if i > 50
-            break
-         end
-      end
-      catch
-         continue
-      end
-
-      data = Dict(:ret => ret, :s => s, :exited => s.v_exited, :trapped => s.v_trapped)
-      BSON.@save "$(dir)/data_$trial.bson" data
-      
-      push!(returns, ret)
-      push!(exited, s.v_exited)
-      push!(trapped, s.v_trapped)
-
-      anim = @animate for p in belief_plots
-         plot(p)
-      end
-
-      gif(anim, "$(dir)/beliefs_$trial.gif", fps=2)
-
-      anim = @animate for p in renders
-         plot(p)
-      end
-
-      gif(anim, "$(dir)/renders_$trial.gif", fps=2)
-   end
-   data = Dict(:returns=>returns, :exited=>exited, :trapped=>trapped)
-   BSON.@save "results/data_Nsamples_$sz.bson" data
-end
-
-data10 = BSON.load("results/data_Nsamples_10.bson")[:data]
-data100 = BSON.load("results/data_Nsamples_100.bson")[:data]
-data1000 = BSON.load("results/data_Nsamples_1000.bson")[:data]
-data10000 = BSON.load("results/data_Nsamples_10000.bson")[:data]
-datas = [data10, data100, data1000,]
-
-function plot_metric(metric)
-   mean_metrics = [mean(d[metric]) for d in datas]
-   std_metrics = [std(d[metric]) for d in datas]
-   plot([10, 100, 1000], mean_metrics, yerr=std_metrics, xscale=:log, line=false, marker=true, label="", ylabel="Return", xlabel="No. Tree Queries", title=metric)
-end
-
-p1 = plot_metric(:returns)
-p2 = plot_metric(:trapped)
-p3 = plot_metric(:exited)
-
-plot(p1, p2, p3, layout = (1,3), size=(1800, 400))
-savefig("No_Tree_Query_Results_r_1000.pdf")
-
-# Run two different solvers
-mean([simulate(RolloutSimulator(), pomdp, RandomPolicy(pomdp), BootstrapFilter(pomdp, 100)) for _=1:10]) #0.0678
-mean([simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100)) for _=1:10])
-
-simulate(RolloutSimulator(), pomdp, planner, BootstrapFilter(pomdp, 100))
 

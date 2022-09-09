@@ -1,10 +1,33 @@
 @with_kw struct SubsurfaceDistribution
 	x = collect(0:0.02:1)
-	x_inj = nothing
 	ρ = Distributions.Uniform(0.5, 1.5)
 	lobe_height = Distributions.Uniform(0.05, 0.25)
 	center_height = Distributions.Uniform(0.05, 0.5)
 	linear_amplitude = Distributions.Uniform(0.05, 0.5)
+end
+
+function param_distribution(d::SubsurfaceDistribution)
+	product_distribution([d.lobe_height, d.center_height, d.linear_amplitude, d.ρ])
+end
+
+#TODO: Make this a function of the subsurface distribution since it can change
+function clamp_distribution(x)
+	x[1] = clamp(x[1],0.05, 0.25)
+	x[2] = clamp(x[2],0.05, 0.5)
+	x[3] = clamp(x[3],0.05, 0.5)
+	x[4] = clamp(x[4],0.5, 1.5)
+	x
+end
+
+function plot_belief(b, s0=nothing; title="belief")
+   plt = plot(title=title, ylims=(0,1))
+   for p in b.particles
+       plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
+   end
+   if !isnothing(s0)
+	   plot!(s0.m.x, s0.m.h, color=:red, label="ground truth")
+   end
+   plt
 end
 
 function construct_surface(x, lobe_height, center_height, linear_amplitude, porosity)
@@ -22,12 +45,8 @@ end
 function Base.rand(ssd::SubsurfaceDistribution)
 	# Sample the shape parameters to construct the mesh
 	m = construct_surface(ssd.x, rand(ssd.lobe_height), rand(ssd.center_height), rand(ssd.linear_amplitude), rand(ssd.ρ))
-
-	# determine the injection spill region
-	# sr = spill_region(m, ssd.x_inj)
-	sr = nothing
 	
-	SpillpointInjectionState(;m, sr, ssd.x_inj)
+	SpillpointInjectionState(;m)
 end
 
 Base.rand(ssd::SubsurfaceDistribution, d::Int) = [rand(ssd) for _ in 1:d]

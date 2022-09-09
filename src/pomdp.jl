@@ -1,12 +1,25 @@
 @with_kw mutable struct SpillpointInjectionState
 	m::SpillpointMesh
-	sr
+	sr = nothing
 	x_inj = nothing
 	polys = []
 	v_trapped = 0
 	v_exited = 0
 	injection_rate = 0
 	stop = false
+end
+
+## Functions to convert back and forth from a parameter vector and state (used by SIR Particle Filter)
+function params2state(params, sref)
+	m = construct_surface(sref.m.x, params...)
+	sr = isnothing(sref.x_inj) ? nothing : spill_region(m, sref.x_inj)
+	
+	# NOTE: We are explicitly NOT re-injecting and computing polys. Its not needed and is costly
+	SpillpointInjectionState(sref; m, sr, v_trapped=sref.v_trapped, v_exited=sref.v_exited)
+end
+
+function state2params(s)
+	[s.m.params..., s.m.ρ]
 end
 
 @with_kw struct SpillpointInjectionPOMDP <: POMDP{SpillpointInjectionState, Tuple{Symbol, Any}, AbstractArray}
@@ -89,8 +102,13 @@ function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 		dists = []
 		for x_well in a[2]
 			height, thickness = observe_depth(sp.polys, x_well)
-			push!(dists, Normal(height, pomdp.height_noise_std))
-			push!(dists, Normal(thickness, pomdp.sat_noise_std))
+			if thickness == 0
+				push!(dists, Bernoulli(0))
+				push!(dists, Bernoulli(0))
+			else
+				push!(dists, Normal(height, pomdp.height_noise_std))
+				push!(dists, Normal(thickness, pomdp.sat_noise_std))
+			end
 		end
 		return product_distribution([exited..., dists...])
 	else
@@ -134,7 +152,9 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 	if !isnothing(timestep)
 		title = string(title, " timestep: $timestep")
 	end
-	plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title=title)
+	if !isnothing(s.x_inj)
+		plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title=title)
+	end
 	if !isnothing(a) && a[1] == :observe
 		for o in a[2]
 			plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue)

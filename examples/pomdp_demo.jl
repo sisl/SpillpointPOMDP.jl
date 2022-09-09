@@ -84,7 +84,7 @@ for trial in 1:Ntrials
 						return rand(actions(pomdp, s))
 					end
 				end
-				simulate_and_save(pomdp, random_policy, s0, nothing, nothing, dir, false)
+				simulate_and_save(pomdp, random_policy, s0, nothing, nothing, dir, false, USE_PLOT)
 				
 			elseif solver_type == :no_uncertainty
 				up = SpillpointAnalysis.SIRParticleFilter(
@@ -118,7 +118,7 @@ for trial in 1:Ntrials
 						return action(planner, s_root)
 					end
 				end
-				simulate_and_save(pomdp, no_uncertainty_policy, s0, b, up, dir, true)
+				simulate_and_save(pomdp, no_uncertainty_policy, s0, b, up, dir, true, USE_PLOT)
 			elseif solver_type == :fixed_schedule
 				up = SpillpointAnalysis.SIRParticleFilter(
 					model=pomdp, 
@@ -160,7 +160,7 @@ for trial in 1:Ntrials
 					end
 				end
 
-				simulate_and_save(pomdp, fixed_schedule_policy, s0, b0, up, dir, true)
+				simulate_and_save(pomdp, fixed_schedule_policy, s0, b0, up, dir, true, USE_PLOT)
 			elseif solver_type == :POMCPOW_basic
 				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
 				planner = solve(solver, pomdp)
@@ -181,7 +181,7 @@ for trial in 1:Ntrials
 					elite_frac=0.3
 				)
 				b0 = initialize_belief(up, initialstate(pomdp))
-				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true)
+				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true, USE_PLOT)
 			else
 				@error "unrecognized solver type: $solver_type"
 			end

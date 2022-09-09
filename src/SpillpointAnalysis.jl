@@ -18,7 +18,7 @@ module SpillpointAnalysis
 	export SpillpointMesh
 	include("mesh.jl")
 
-	export inject
+	export inject, trap_capacity
 	include("spillpoint.jl")
 	
 	export SpillpointInjectionPOMDP, SpillpointInjectionState

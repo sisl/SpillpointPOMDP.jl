@@ -119,3 +119,17 @@ function observe_depth(polygons, x_obs)
 	0, 0
 end
 
+function trap_capacity(m::SpillpointMesh)
+	srs = unique(m.SR)[2:end-1]
+	maximum([trap_capacity(m, sr) for sr in srs])
+end
+
+function trap_capacity(m::SpillpointMesh, sr)
+	function max_trapped(v)
+		_, v_trapped, v_exited = inject(m, sr, v)
+		return -v_trapped + 1000*v_exited
+	end
+	res = optimize(max_trapped, 0., 1., rel_tol=1e-4, abs_tol=1e-5)
+	Optim.minimizer(res)
+end
+

@@ -10,6 +10,7 @@ module SpillpointAnalysis
 	using POMDPTools
 	using Plots
 	using Random
+	using LaTeXStrings
 	
 	## For SIRParticleFilter
 	using MultiKDE

@@ -25,14 +25,14 @@ solvers = [:random, :no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_S
 # println("running trial $trial")
 # Random.seed!(trial)
 
-exited_reward_amount_options = [-1000, -10000]
-exited_reward_binary_options = [-10]
-obs_rewards_options = [[-.3, -.7], [-3, -7]]
-height_noise_std_options = [0.01, 0.1, 1]
-sat_noise_std_options = [0.01, 0.1, 1]
-exploration_coefficient_options = [2, 20]
+exited_reward_amount_options = [-1000., -10000.]
+exited_reward_binary_options = [-10.]
+obs_rewards_options = [[-.3, -.7], [-3., -7.]]
+height_noise_std_options = [0.01, 0.1, 1.]
+sat_noise_std_options = [0.01, 0.1, 1.]
+exploration_coefficient_options = [2., 20.]
 alpha_observation_options = [0.1, 0.3, 0.7]
-k_obsservation_options=[1,10]
+k_observation_options=[1.,10.]
 tree_queries_options=[1000, 5000]
 
 
@@ -51,7 +51,7 @@ for trial in 1:Ntrials
 	sat_noise_std = height_noise_std
 	exploration_coefficient=rand(exploration_coefficient_options)
 	alpha_observation=rand(alpha_observation_options)
-	k_observation=rand(k_obsservation_options)
+	k_observation=rand(k_observation_options)
 	tree_queries=rand(tree_queries_options)
 
 	params = Dict("exited_reward_amount"=>exited_reward_amount, 

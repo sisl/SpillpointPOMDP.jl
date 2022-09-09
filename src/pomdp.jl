@@ -141,25 +141,27 @@ POMDPs.isterminal(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState) = s.
 
 POMDPs.initialstate(m::SpillpointInjectionPOMDP) = m.s0_dist
 
-function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; timestep=nothing)
+function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; timestep=nothing, return_one=false)
 	poly, v_trapped, v_exited = inject(s.m, s.sr, s.v_trapped+s.v_exited)
 	x, h = s.m.x, s.m.h
-	p3 = plot(x, h, legend = :topleft, label="", yrange=(0,1.0))
+	p3 = plot([1], palette=:blues, color=1, label=L"{\rm CO}_2")
 	# for i in 1:length(x)
 	# 	scatter!([x[i]], [h[i]], color=s.m.SR[i], label="")
 	# end
 	for p in poly
 		if Polyhedra.volume(p) != 0
-			plot!(p, color=:green, label="")
+			plot!(p, label="", palette=:blues, color=1, linecolor=1)
 		end
 	end
+	plot!(x, h, legend = :topright, label="Top Surface", color=:black, yrange=(0,1.0), ylabel="Height", xlabel="Position")
+	
 	maxh = maximum(s.m.h)
-	title=isnothing(a) ? "" : "action: $a"
+	title=isnothing(a) ? "Reservoir Top Surface" : "action: $a"
 	if !isnothing(timestep)
 		title = string(title, " timestep: $timestep")
 	end
 	if !isnothing(s.x_inj)
-		plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="", title=title)
+		plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="Injector", title=title)
 	end
 	if !isnothing(a) && a[1] == :observe
 		for o in a[2]
@@ -168,8 +170,7 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 	end
 	
 	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")
-	p3
-	plot(p3, p4, size=(900,300))
+	return_one ? p3 : plot(p3, p4, size=(900,300))
 end
 
 POMDPTools.render(m::SpillpointInjectionPOMDP, step; kwargs...) = render(m, step[:s], step[:a])

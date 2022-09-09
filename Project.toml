@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LazySets = "b4f0291d-fe17-52bc-9479-3d1a343d9043"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MultiKDE = "77543b7f-bd95-4024-91c1-46775346e0e7"

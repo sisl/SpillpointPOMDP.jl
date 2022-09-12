@@ -11,10 +11,13 @@ using Random
 using MCTS
 include("utils.jl")
 
-USE_PLOT = false
+USE_PLOT = true
 Nstates = 10
 max_steps = 50
 Ntrials = 100
+
+optmisitic_val_estimate(pomdp, s, args...) = 0.25*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
+
 
 Random.seed!(0)
 sample_pomdp = SpillpointInjectionPOMDP()
@@ -26,7 +29,7 @@ solvers = [:random, :no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_S
 # Random.seed!(trial)
 
 exited_reward_amount_options = [-1000., -10000.]
-exited_reward_binary_options = [-10.]
+exited_reward_binary_options = [-1000.]
 obs_rewards_options = [[-.3, -.7], [-3., -7.]]
 height_noise_std_options = [0.01, 0.1, 1.]
 sat_noise_std_options = [0.01, 0.1, 1.]
@@ -44,15 +47,25 @@ for trial in 1:Ntrials
 	trialdir = "results/trial_$trial"
 	try mkdir(trialdir) catch end
 
+	# exited_reward_amount = -1000 #rand(exited_reward_amount_options)
+	# exited_reward_binary = -1000 #rand(exited_reward_binary_options)
+	# obs_rewards = [-0.3, -0.7] #rand(obs_rewards_options)
+	# height_noise_std = 0.1 #rand(height_noise_std_options)
+	# sat_noise_std = 0.1 #height_noise_std
+	# exploration_coefficient=20.#rand(exploration_coefficient_options)
+	# alpha_observation=0.3#rand(alpha_observation_options)
+	# k_observation=1.0#rand(k_observation_options)
+	# tree_queries=1000#rand(tree_queries_options)
+	
 	exited_reward_amount = rand(exited_reward_amount_options)
 	exited_reward_binary = rand(exited_reward_binary_options)
 	obs_rewards = rand(obs_rewards_options)
 	height_noise_std = rand(height_noise_std_options)
 	sat_noise_std = height_noise_std
-	exploration_coefficient=rand(exploration_coefficient_options)
-	alpha_observation=rand(alpha_observation_options)
-	k_observation=rand(k_observation_options)
-	tree_queries=rand(tree_queries_options)
+	exploration_coefficient = rand(exploration_coefficient_options)
+	alpha_observation = rand(alpha_observation_options)
+	k_observation = rand(k_observation_options)
+	tree_queries = rand(tree_queries_options)
 
 	params = Dict("exited_reward_amount"=>exited_reward_amount, 
 					  "exited_reward_binary" => exited_reward_binary,
@@ -95,7 +108,7 @@ for trial in 1:Ntrials
 					N_samples_before_resample=100,
 					clampfn=SpillpointAnalysis.clamp_distribution,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-					elite_frac=0.3
+					elite_frac=0.3,
 				)
 				b0 = initialize_belief(up, initialstate(pomdp))
 				a = (:drill, 0.5)
@@ -106,7 +119,7 @@ for trial in 1:Ntrials
 				up = BootstrapFilter(pomdp, 1)
 				b = ParticleCollection([sguess])
 
-				solver = MCTSSolver(n_iterations=tree_queries, depth=20, exploration_constant=exploration_coefficient, estimate_value=0)
+				solver = MCTSSolver(n_iterations=tree_queries, depth=20, exploration_constant=exploration_coefficient, estimate_value=optmisitic_val_estimate)
 				planner = solve(solver, pomdp)
 
 				no_uncertainty_policy(b, i, observations, args...) = begin
@@ -122,13 +135,16 @@ for trial in 1:Ntrials
 			elseif solver_type == :fixed_schedule
 				up = SpillpointAnalysis.SIRParticleFilter(
 					model=pomdp, 
-					N=200, 
+					N=400, 
 					state2param=SpillpointAnalysis.state2params, 
 					param2state=SpillpointAnalysis.params2state,
 					N_samples_before_resample=100,
-					clampfn=SpillpointAnalysis.clamp_distribution,
+				    clampfn=SpillpointAnalysis.clamp_distribution,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-					elite_frac=0.3
+					# use_all_prior_obs = false
+					elite_frac=0.3,
+					bandwidth_scale=.5,
+					max_cpu_time=120
 				)
 				b0 = initialize_belief(up, initialstate(pomdp))
 				a = (:drill, 0.5)
@@ -162,23 +178,25 @@ for trial in 1:Ntrials
 
 				simulate_and_save(pomdp, fixed_schedule_policy, s0, b0, up, dir, true, USE_PLOT)
 			elseif solver_type == :POMCPOW_basic
-				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=optmisitic_val_estimate, k_observation, alpha_observation)
 				planner = solve(solver, pomdp)
 				up = BootstrapFilter(pomdp, 2000)
 				b0 = initialize_belief(up, initialstate(pomdp))
 				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true)
 			elseif solver_type == :POMCPOW_SIR
-				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=0, k_observation, alpha_observation)
+				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=optmisitic_val_estimate, k_observation, alpha_observation)
 				planner = solve(solver, pomdp)
 				up = SpillpointAnalysis.SIRParticleFilter(
 					model=pomdp, 
-					N=200, 
+					N=400, 
 					state2param=SpillpointAnalysis.state2params, 
 					param2state=SpillpointAnalysis.params2state,
 					N_samples_before_resample=100,
-					clampfn=SpillpointAnalysis.clamp_distribution,
+				    clampfn=SpillpointAnalysis.clamp_distribution,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-					elite_frac=0.3
+					elite_frac=0.3,
+					bandwidth_scale=.5,
+					max_cpu_time=120
 				)
 				b0 = initialize_belief(up, initialstate(pomdp))
 				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true, USE_PLOT)
@@ -188,7 +206,4 @@ for trial in 1:Ntrials
 		end
 	end
 end
-
-
-inchrome(D3Tree(alltrees[1]))
 

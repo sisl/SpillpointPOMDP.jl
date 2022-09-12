@@ -124,12 +124,12 @@ function trap_capacity(m::SpillpointMesh)
 	maximum([trap_capacity(m, sr) for sr in srs])
 end
 
-function trap_capacity(m::SpillpointMesh, sr)
+function trap_capacity(m::SpillpointMesh, sr; lb=0.0, ub=1.0, rel_tol=1e-4, abs_tol=1e-5)
 	function max_trapped(v)
 		_, v_trapped, v_exited = inject(m, sr, v)
 		return -v_trapped + 1000*v_exited
 	end
-	res = optimize(max_trapped, 0., 1., rel_tol=1e-4, abs_tol=1e-5)
+	res = optimize(max_trapped, lb, ub; rel_tol, abs_tol)
 	Optim.minimizer(res)
 end
 

@@ -36,6 +36,7 @@ end
 	exited_reward_binary = -10
 	trapped_reward = 100
 	s0_dist = SubsurfaceDistribution()
+	γ = 0.9
 end
 
 function POMDPs.actions(m::SpillpointInjectionPOMDP, belief)
@@ -135,13 +136,13 @@ function POMDPs.reward(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	pomdp.exited_reward_amount*Δexited + pomdp.trapped_reward*Δtrapped + obs_reward + exited_penalty
 end
 
-POMDPs.discount(::SpillpointInjectionPOMDP) = 0.99
+POMDPs.discount(pomdp::SpillpointInjectionPOMDP) = pomdp.γ
 
 POMDPs.isterminal(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState) = s.stop
 
 POMDPs.initialstate(m::SpillpointInjectionPOMDP) = m.s0_dist
 
-function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; timestep=nothing, return_one=false)
+function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; belief=nothing, timestep=nothing, return_one=false)
 	poly, v_trapped, v_exited = inject(s.m, s.sr, s.v_trapped+s.v_exited)
 	x, h = s.m.x, s.m.h
 	p3 = plot([1], palette=:blues, color=1, label=L"{\rm CO}_2")
@@ -153,7 +154,7 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 			plot!(p, label="", palette=:blues, color=1, linecolor=1)
 		end
 	end
-	plot!(x, h, legend = :topright, label="Top Surface", color=:black, yrange=(0,1.0), ylabel="Height", xlabel="Position")
+	plot!(x, h, legend = :topright, linewidth=2, label="Top Surface", color=!isnothing(belief) ? :red : :black, yrange=(0,1.0), ylabel="Height", xlabel="Position")
 	
 	maxh = maximum(s.m.h)
 	title=isnothing(a) ? "Reservoir Top Surface" : "action: $a"
@@ -164,9 +165,14 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 		plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="Injector", title=title)
 	end
 	if !isnothing(a) && a[1] == :observe
-		for o in a[2]
-			plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue)
+		for (i, o) in enumerate(a[2])
+			plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue, label=i==1 ? "Observation Loc" : "")
 		end
+	end
+	if !isnothing(belief)
+		for p in belief.particles
+	        plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
+	    end
 	end
 	
 	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")

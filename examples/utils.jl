@@ -9,14 +9,12 @@ function simulate_and_save(pomdp, policy_fn, s0, b0, up, dir, update_belief=true
 	s = deepcopy(s0)
 	b = deepcopy(b0)
 
-	renders = Any[]
+	renders = Any[ render(pomdp, s, timestep=0, belief=update_belief ? b : nothing) ]
 	beliefs = Any[b]
 	actions = Any[]
 	states = Any[s]
 	observations = []
 	
-	update_belief && use_plot && (belief_plots = [plot_belief(b, s0, title="timestep: 0")])
-
 	i=1
 	ret = 0
 	prev_obs = []
@@ -36,8 +34,7 @@ function simulate_and_save(pomdp, policy_fn, s0, b0, up, dir, update_belief=true
 		
 		# Store the other results
 		ret += r
-		use_plot && push!(renders, render(pomdp, sp, a, timestep=i))
-		update_belief && use_plot && push!(belief_plots, plot_belief(b, s0, title="timestep: $i"))
+		use_plot && push!(renders, render(pomdp, sp, a, timestep=i, belief=update_belief ? b : nothing))
 		push!(actions, a)
 		push!(states, sp)
 		push!(observations, o)
@@ -56,13 +53,6 @@ function simulate_and_save(pomdp, policy_fn, s0, b0, up, dir, update_belief=true
 
 	# Plot the Gifs
 	if use_plot
-		if update_belief
-			anim = @animate for p in belief_plots
-			   plot(p)
-			end
-			gif(anim, "$dir/beliefs.gif", fps=2)
-		end
-		
 		anim = @animate for p in renders
 		   plot(p)
 		end

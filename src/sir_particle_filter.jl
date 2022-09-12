@@ -12,6 +12,7 @@
 	use_all_prior_obs=true # Whether to store and use all prior observations
 	prior=nothing # Initial prior (used to compute importance weights)
 	prior_observations = [] # store the prior observations here
+	max_cpu_time = Inf
 end
 
 function Base.rand(kde::KDEMulti)
@@ -53,9 +54,12 @@ function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
 	weights = Float64[] # Importance weights 
 	
 	# plots = []
-	
+	tstart = time()
 	# Loop until the number of particles is reached
 	while true #length(new_particle_params) < 10*up.N
+		if time() - tstart > up.max_cpu_time
+			break
+		end
 		# Betwen each resample, just sample particles and comput their weights
 		for i=1:up.N_samples_before_resample # 1:min(10*up.N - length(new_particle_params), up.N_samples_before_resample)
 			x = up.clampfn(rand(kde)) # Sample a new particle (and clamp it as necessary)
@@ -118,6 +122,9 @@ function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
 	
 	# Do the final resampling and return the particle set
 	weighted_ps = WeightedParticleBelief(new_particle_states, weights.*poss)
+	if sum(weights.*poss) == 0
+		println("found all zero weights")
+	end
 	resample(LowVarianceResampler(up.N), weighted_ps, Random.GLOBAL_RNG)
 end
 

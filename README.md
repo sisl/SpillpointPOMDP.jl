@@ -3,6 +3,9 @@ Markov decision process formulation of CCS using a spillpoint forward model. The
 
 ![ccs.gif](ccs.gif)
 
+## POMDP Specification
+
+
 ## States
 
 The state is represented by the struct `SpillpointInjectionState` with the following parameters.

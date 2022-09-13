@@ -29,15 +29,13 @@ pomdp = SpillpointInjectionPOMDP(;exited_reward_amount, exited_reward_binary, ob
 # pomdp = SpillpointInjectionPOMDP(exited_reward_binary=-1000)
 
 # Setup and run the solver
-optmisitic_val_estimate(pomdp, s, h, steps) = 0.25*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
+optmisitic_val_estimate(pomdp, s, h, steps) = 0.5*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
 solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=true, estimate_value=optmisitic_val_estimate, k_observation, alpha_observation)
 planner = solve(solver, pomdp)
 
 s0 = deepcopy(initial_states[1])
 s = deepcopy(s0)
 
-# up_basic = BootstrapFilter(pomdp, 1000)
-# up = BasicParticleFilter(pomdp, PerturbationResampler(LowVarianceResampler(1000), perturb_surface), 1000)
 up = SpillpointAnalysis.SIRParticleFilter(
 	model=pomdp, 
 	N=200, 
@@ -46,7 +44,6 @@ up = SpillpointAnalysis.SIRParticleFilter(
 	N_samples_before_resample=100,
     clampfn=SpillpointAnalysis.clamp_distribution,
 	prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-	# use_all_prior_obs = false
 	elite_frac=0.3,
 	bandwidth_scale=.5,
 	max_cpu_time=60

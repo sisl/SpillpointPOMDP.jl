@@ -14,15 +14,15 @@ include("utils.jl")
 USE_PLOT = true
 Nstates = 10
 max_steps = 50
-Ntrials = 100
+Ntrials = 1
 
-optmisitic_val_estimate(pomdp, s, args...) = 0.25*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
+optmisitic_val_estimate(pomdp, s, args...) = 0.5*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
 
 
 Random.seed!(0)
 sample_pomdp = SpillpointInjectionPOMDP()
 initial_states = [rand(initialstate(sample_pomdp)) for i=1:Nstates]
-solvers = [:random, :no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
+solvers = [:no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
 
 # trial = parse(Int, ARGS[1])
 # println("running trial $trial")
@@ -47,15 +47,15 @@ for trial in 1:Ntrials
 	trialdir = "results/trial_$trial"
 	try mkdir(trialdir) catch end
 
-	# exited_reward_amount = -1000 #rand(exited_reward_amount_options)
-	# exited_reward_binary = -1000 #rand(exited_reward_binary_options)
-	# obs_rewards = [-0.3, -0.7] #rand(obs_rewards_options)
-	# height_noise_std = 0.1 #rand(height_noise_std_options)
-	# sat_noise_std = 0.1 #height_noise_std
-	# exploration_coefficient=20.#rand(exploration_coefficient_options)
-	# alpha_observation=0.3#rand(alpha_observation_options)
-	# k_observation=1.0#rand(k_observation_options)
-	# tree_queries=1000#rand(tree_queries_options)
+	exited_reward_amount = -1000 
+	exited_reward_binary = -1000 
+	obs_rewards = [-0.3, -0.7] 
+	height_noise_std = 0.01 
+	sat_noise_std = 0.01 
+	exploration_coefficient=20.
+	alpha_observation=0.3
+	k_observation=1.0
+	tree_queries=5000
 	
 	exited_reward_amount = rand(exited_reward_amount_options)
 	exited_reward_binary = rand(exited_reward_binary_options)
@@ -102,7 +102,7 @@ for trial in 1:Ntrials
 			elseif solver_type == :no_uncertainty
 				up = SpillpointAnalysis.SIRParticleFilter(
 					model=pomdp, 
-					N=200, 
+					N=400, 
 					state2param=SpillpointAnalysis.state2params, 
 					param2state=SpillpointAnalysis.params2state,
 					N_samples_before_resample=100,
@@ -141,7 +141,6 @@ for trial in 1:Ntrials
 					N_samples_before_resample=100,
 				    clampfn=SpillpointAnalysis.clamp_distribution,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
-					# use_all_prior_obs = false
 					elite_frac=0.3,
 					bandwidth_scale=.5,
 					max_cpu_time=120

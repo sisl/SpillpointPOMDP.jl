@@ -55,7 +55,7 @@ end
 
 function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG)
 	stop = s.stop
-	injection_rate = s.injection_rate
+	injection_rate = 0
 	obs_wells = []
 	x_inj = s.x_inj
 	sr = s.sr

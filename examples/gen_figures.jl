@@ -2,6 +2,7 @@ using SpillpointAnalysis
 using POMDPs
 using POMDPTools
 using Plots
+using JLD2
 pgfplotsx()
 
 pomdp = SpillpointInjectionPOMDP()
@@ -18,11 +19,11 @@ savefig(p, "examples/reservoir_example.tex")
 using JLD2, SpillpointAnalysis
 
 
-name1 = "POMCPOW (Basic)"
+name1 = "POMCPOW (SIR)"
 name2 = "Baseline (No Uncertainty)"
 
 results1 = JLD2.load("results/trial_1/POMCPOW_SIR/state_1/results.jld2")
-results2 = JLD2.load("results/trial_1/POMCPOW_basic/state_1/results.jld2")
+results2 = JLD2.load("results/trial_1/no_uncertainty/state_1/results.jld2")
 
 
 trapped1 = [s.v_trapped / trap_capacity(s.m) for s in results1["states"]]

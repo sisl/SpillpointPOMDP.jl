@@ -7,8 +7,8 @@ using Printf
 folder = "results/trial_1"
 params = JLD2.load("$folder/params.jld2")
 
-solvers = [:no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
-solver_names = ["Best Guess MDP", "Fixed Schedule", "POMCPOW (Basic)", "POMCPOW (SIR)"]
+solvers = [:random, :no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
+solver_names = ["Random", "Best Guess MDP", "Fixed Schedule", "POMCPOW (Basic)", "POMCPOW (SIR)"]
 Nstates = 10
 
 function mean_std_table_entry(vec, suffix = " & ")

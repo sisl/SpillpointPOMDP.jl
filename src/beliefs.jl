@@ -19,13 +19,13 @@ function clamp_distribution(x)
 	x
 end
 
-function plot_belief(b, s0=nothing; title="belief")
-   plt = plot(title=title, ylims=(0,1))
-   for p in b.particles
-       plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
+function plot_belief(b, s0=nothing; title="belief", legend=:topleft)
+   plt = plot(title=title, ylims=(0,1), legend=legend)
+   for (i, p) in enumerate(b.particles)
+       plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label=i==1 ? "Particles" : "")
    end
    if !isnothing(s0)
-	   plot!(s0.m.x, s0.m.h, color=:red, label="ground truth")
+	   plot!(s0.m.x, s0.m.h, color=:red, label="Ground truth")
    end
    plt
 end

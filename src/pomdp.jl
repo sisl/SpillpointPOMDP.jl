@@ -5,7 +5,6 @@
 	polys = []
 	v_trapped = 0
 	v_exited = 0
-	injection_rate = 0
 	stop = false
 end
 
@@ -76,7 +75,7 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	total_injected = s.v_trapped + s.v_exited + pomdp.Δt * injection_rate
 	polys, v_trapped, v_exited = inject(s.m, s.sr, total_injected)
 	
-	sp = SpillpointInjectionState(s; sr, x_inj, polys, v_trapped, v_exited, stop, injection_rate)
+	sp = SpillpointInjectionState(s; sr, x_inj, polys, v_trapped, v_exited, stop)
 	
 	return (sp=sp, o=rand(observation(pomdp, s, a, sp)), r=reward(pomdp, s, a, sp))
 end

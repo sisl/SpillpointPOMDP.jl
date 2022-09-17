@@ -7,8 +7,10 @@ using POMCPOW
 using ParticleFilters
 using D3Trees
 using BSON
+using Random
 
 ## Playing around with the POMDP
+Nstates=10
 Random.seed!(0)
 sample_pomdp = SpillpointInjectionPOMDP()
 initial_states = [rand(initialstate(sample_pomdp)) for i=1:Nstates]

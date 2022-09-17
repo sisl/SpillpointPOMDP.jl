@@ -22,7 +22,7 @@ optmisitic_val_estimate(pomdp, s, args...) = 0.5*pomdp.trapped_reward*(trap_capa
 Random.seed!(0)
 sample_pomdp = SpillpointInjectionPOMDP()
 initial_states = [rand(initialstate(sample_pomdp)) for i=1:Nstates]
-solvers = [:no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
+solvers = [:random, :no_uncertainty, :fixed_schedule, :POMCPOW_basic, :POMCPOW_SIR]
 
 # trial = parse(Int, ARGS[1])
 # println("running trial $trial")

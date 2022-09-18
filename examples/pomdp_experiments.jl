@@ -16,7 +16,7 @@ Nstates = 10
 max_steps = 50
 Ntrials = 1
 
-optmisitic_val_estimate(pomdp, s, args...) = 0.5*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
+optmisitic_val_estimate(pomdp, s, args...) = 0.1*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
 
 
 Random.seed!(0)
@@ -54,18 +54,18 @@ for trial in 1:Ntrials
 	sat_noise_std = 0.01 
 	exploration_coefficient=20.
 	alpha_observation=0.3
-	k_observation=1.0
+	k_observation=10.0
 	tree_queries=5000
 	
-	exited_reward_amount = rand(exited_reward_amount_options)
-	exited_reward_binary = rand(exited_reward_binary_options)
-	obs_rewards = rand(obs_rewards_options)
-	height_noise_std = rand(height_noise_std_options)
-	sat_noise_std = height_noise_std
-	exploration_coefficient = rand(exploration_coefficient_options)
-	alpha_observation = rand(alpha_observation_options)
-	k_observation = rand(k_observation_options)
-	tree_queries = rand(tree_queries_options)
+	# exited_reward_amount = rand(exited_reward_amount_options)
+	# exited_reward_binary = rand(exited_reward_binary_options)
+	# obs_rewards = rand(obs_rewards_options)
+	# height_noise_std = rand(height_noise_std_options)
+	# sat_noise_std = height_noise_std
+	# exploration_coefficient = rand(exploration_coefficient_options)
+	# alpha_observation = rand(alpha_observation_options)
+	# k_observation = rand(k_observation_options)
+	# tree_queries = rand(tree_queries_options)
 
 	params = Dict("exited_reward_amount"=>exited_reward_amount, 
 					  "exited_reward_binary" => exited_reward_binary,
@@ -107,6 +107,7 @@ for trial in 1:Ntrials
 					param2state=SpillpointAnalysis.params2state,
 					N_samples_before_resample=100,
 					clampfn=SpillpointAnalysis.clamp_distribution,
+					fraction_prior = 0.5,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
 					elite_frac=0.3,
 				)
@@ -141,6 +142,7 @@ for trial in 1:Ntrials
 					N_samples_before_resample=100,
 				    clampfn=SpillpointAnalysis.clamp_distribution,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					fraction_prior = 0.5,
 					elite_frac=0.3,
 					bandwidth_scale=.5,
 					max_cpu_time=120
@@ -187,15 +189,16 @@ for trial in 1:Ntrials
 				planner = solve(solver, pomdp)
 				up = SpillpointAnalysis.SIRParticleFilter(
 					model=pomdp, 
-					N=400, 
+					N=200, 
 					state2param=SpillpointAnalysis.state2params, 
 					param2state=SpillpointAnalysis.params2state,
 					N_samples_before_resample=100,
 				    clampfn=SpillpointAnalysis.clamp_distribution,
+					fraction_prior = 0.5,
 					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
 					elite_frac=0.3,
 					bandwidth_scale=.5,
-					max_cpu_time=120
+					max_cpu_time=60
 				)
 				b0 = initialize_belief(up, initialstate(pomdp))
 				simulate_and_save(pomdp, (b, args...) -> action(planner, b), s0, b0, up, dir, true, USE_PLOT)

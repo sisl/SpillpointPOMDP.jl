@@ -5,6 +5,7 @@
 	param2state	# Funtion that maps a vector of params and a reference state to a state
 	clampfn	# Clamps the parameters after sampling
 	N_samples_before_resample=floor(Int, N/10) # Number of samples used between resamples
+	fraction_prior = 0.0 # Fraction samples from prior
 	min_bandwidth=0.01 # Minimum bandwidth for the KDE (relevant when 1 good sample gets through)
 	bandwidth_scale=0.3 # Scale the bandwidth wrt to the silverman heuristic
 	weight_clamp=1 # Upper bound clamp on the importance weight
@@ -60,8 +61,12 @@ function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
 		if time() - tstart > up.max_cpu_time
 			break
 		end
-		# Betwen each resample, just sample particles and comput their weights
-		for i=1:up.N_samples_before_resample # 1:min(10*up.N - length(new_particle_params), up.N_samples_before_resample)
+		
+		# Compute the number of samples from proposal dist
+		N_prop = floor(Int,(1-up.fraction_prior)*up.N_samples_before_resample)
+
+		# Take samples from proposal dist and compute weights
+		for i=1:N_prop 
 			x = up.clampfn(rand(kde)) # Sample a new particle (and clamp it as necessary)
 			
 			pos=1
@@ -82,6 +87,26 @@ function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
 			push!(new_particle_states, sp)
 			push!(new_particle_params, x)
 			push!(weights, weight)
+			push!(poss, pos)
+		end
+
+		# Include some samples from prior 
+		for i=1:(up.N_samples_before_resample - N_prop)
+			x = rand(up.prior)
+			pos=1
+			sp = nothing
+			for (sref, a, o) in up.prior_observations
+				s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
+				sp, _, _ = gen(up.model, s, a) # Propogate foward with the gen function 
+				
+				pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
+			end
+
+			
+			# Store the particles in the arrays
+			push!(new_particle_states, sp)
+			push!(new_particle_params, x)
+			push!(weights, 1.0)
 			push!(poss, pos)
 		end
 		

@@ -1,4 +1,4 @@
-using SpillpointAnalysis
+using SpillpointPOMDP
 using POMDPs
 using POMDPTools
 using Plots
@@ -16,7 +16,7 @@ p = render(pomdp, s, return_one=true)
 
 savefig(p, "examples/reservoir_example.tex")
 
-using JLD2, SpillpointAnalysis
+using JLD2, SpillpointPOMDP
 
 
 name1 = "POMCPOW (SIR)"

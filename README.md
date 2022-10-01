@@ -1,4 +1,4 @@
-# SpillpointAnalysis.jl
+# SpillpointPOMDP.jl
 Markov decision process formulation of CCS using a spillpoint forward model. The POMDP is encapsulated by the struct `SpillpointInjectionPOMDP`.
 
 ![figures/ccs.gif](figures/ccs.gif)

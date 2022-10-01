@@ -1,4 +1,4 @@
-using SpillpointAnalysis
+using SpillpointPOMDP
 using POMDPGifs
 using POMCPOW
 using POMDPSimulators

@@ -1,4 +1,4 @@
-using SpillpointAnalysis
+using SpillpointPOMDP
 using Random
 using ParticleFilters
 using MCTS
@@ -16,14 +16,14 @@ s0 = rand(initialstate(pomdp))
 Random.seed!(floor(Int64, time()))
 
 ## Get a sample that matches the drilling location
-up = SpillpointAnalysis.SIRParticleFilter(
+up = SpillpointPOMDP.SIRParticleFilter(
 	model=pomdp, 
 	N=200, 
-	state2param=SpillpointAnalysis.state2params, 
-	param2state=SpillpointAnalysis.params2state,
+	state2param=SpillpointPOMDP.state2params,
+	param2state=SpillpointPOMDP.params2state,
 	N_samples_before_resample=100,
-	clampfn=SpillpointAnalysis.clamp_distribution,
-	prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+	clampfn=SpillpointPOMDP.clamp_distribution,
+	prior=SpillpointPOMDP.param_distribution(initialstate(pomdp)),
 	elite_frac=0.3
 )
 b0 = initialize_belief(up, initialstate(pomdp))

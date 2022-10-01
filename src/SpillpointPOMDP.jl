@@ -1,4 +1,4 @@
-module SpillpointAnalysis
+module SpillpointPOMDP
 
 	using POMDPs
 	using Polyhedra

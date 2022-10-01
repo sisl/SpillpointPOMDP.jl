@@ -1,4 +1,4 @@
-using SpillpointAnalysis
+using SpillpointPOMDP
 using Random
 include("utils.jl")
 

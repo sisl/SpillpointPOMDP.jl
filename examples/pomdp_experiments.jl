@@ -1,4 +1,4 @@
-using SpillpointAnalysis
+using SpillpointPOMDP
 using Plots
 using Distributions
 using POMDPs
@@ -100,15 +100,15 @@ for trial in 1:Ntrials
 				simulate_and_save(pomdp, random_policy, s0, nothing, nothing, dir, false, USE_PLOT)
 				
 			elseif solver_type == :no_uncertainty
-				up = SpillpointAnalysis.SIRParticleFilter(
+				up = SpillpointPOMDP.SIRParticleFilter(
 					model=pomdp, 
 					N=400, 
-					state2param=SpillpointAnalysis.state2params, 
-					param2state=SpillpointAnalysis.params2state,
+					state2param=SpillpointPOMDP.state2params,
+					param2state=SpillpointPOMDP.params2state,
 					N_samples_before_resample=100,
-					clampfn=SpillpointAnalysis.clamp_distribution,
+					clampfn=SpillpointPOMDP.clamp_distribution,
 					fraction_prior = 0.5,
-					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					prior=SpillpointPOMDP.param_distribution(initialstate(pomdp)),
 					elite_frac=0.3,
 				)
 				b0 = initialize_belief(up, initialstate(pomdp))
@@ -134,14 +134,14 @@ for trial in 1:Ntrials
 				end
 				simulate_and_save(pomdp, no_uncertainty_policy, s0, b, up, dir, true, USE_PLOT)
 			elseif solver_type == :fixed_schedule
-				up = SpillpointAnalysis.SIRParticleFilter(
+				up = SpillpointPOMDP.SIRParticleFilter(
 					model=pomdp, 
 					N=400, 
-					state2param=SpillpointAnalysis.state2params, 
-					param2state=SpillpointAnalysis.params2state,
+					state2param=SpillpointPOMDP.state2params,
+					param2state=SpillpointPOMDP.params2state,
 					N_samples_before_resample=100,
-				    clampfn=SpillpointAnalysis.clamp_distribution,
-					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+				    clampfn=SpillpointPOMDP.clamp_distribution,
+					prior=SpillpointPOMDP.param_distribution(initialstate(pomdp)),
 					fraction_prior = 0.5,
 					elite_frac=0.3,
 					bandwidth_scale=.5,
@@ -187,15 +187,15 @@ for trial in 1:Ntrials
 			elseif solver_type == :POMCPOW_SIR
 				solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=false, estimate_value=optmisitic_val_estimate, k_observation, alpha_observation)
 				planner = solve(solver, pomdp)
-				up = SpillpointAnalysis.SIRParticleFilter(
+				up = SpillpointPOMDP.SIRParticleFilter(
 					model=pomdp, 
 					N=200, 
-					state2param=SpillpointAnalysis.state2params, 
-					param2state=SpillpointAnalysis.params2state,
+					state2param=SpillpointPOMDP.state2params, 
+					param2state=SpillpointPOMDP.params2state,
 					N_samples_before_resample=100,
-				    clampfn=SpillpointAnalysis.clamp_distribution,
+				    clampfn=SpillpointPOMDP.clamp_distribution,
 					fraction_prior = 0.5,
-					prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+					prior=SpillpointPOMDP.param_distribution(initialstate(pomdp)),
 					elite_frac=0.3,
 					bandwidth_scale=.5,
 					max_cpu_time=60

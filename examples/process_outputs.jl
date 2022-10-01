@@ -1,6 +1,6 @@
 using JLD2
 using Polyhedra
-using SpillpointAnalysis
+using SpillpointPOMDP
 using Statistics
 using Printf
 

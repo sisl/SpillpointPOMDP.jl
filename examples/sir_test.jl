@@ -1,4 +1,4 @@
-using SpillpointAnalysis
+using SpillpointPOMDP
 using Plots
 pgfplotsx()
 using Distributions
@@ -11,14 +11,14 @@ using BSON
 pomdp = SpillpointInjectionPOMDP(height_noise_std = 0.1, sat_noise_std = 0.1)
 
 basic_up = BootstrapFilter(pomdp, 200)
-SIR_up = SpillpointAnalysis.SIRParticleFilter(
+SIR_up = SpillpointPOMDP.SIRParticleFilter(
 	model=pomdp, 
 	N=200, 
-	state2param=SpillpointAnalysis.state2params, 
-	param2state=SpillpointAnalysis.params2state,
+	state2param=SpillpointPOMDP.state2params,
+	param2state=SpillpointPOMDP.params2state,
 	N_samples_before_resample=100,
-    clampfn=SpillpointAnalysis.clamp_distribution,
-	prior=SpillpointAnalysis.param_distribution(initialstate(pomdp)),
+    clampfn=SpillpointPOMDP.clamp_distribution,
+	prior=SpillpointPOMDP.param_distribution(initialstate(pomdp)),
 	elite_frac=0.3,
 	bandwidth_scale=.5,
 	max_cpu_time=60

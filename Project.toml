@@ -1,4 +1,4 @@
-name = "SpillpointAnalysis"
+name = "SpillpointPOMDP"
 uuid = "c0d8999d-0f66-4d3f-9af4-6d8207e3a4b3"
 authors = ["Anthony Corso <anthonycorso92@gmail.com>"]
 version = "0.1.0"

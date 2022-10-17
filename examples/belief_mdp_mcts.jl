@@ -8,6 +8,8 @@ using ParticleFilters
 using D3Trees
 using BSON
 using Random
+using MCTS
+
 
 ## Playing around with the POMDP
 Nstates = 10
@@ -24,7 +26,7 @@ sat_noise_std = 0.1 #height_noise_std
 exploration_coefficient = 20. #rand(exploration_coefficient_options)
 alpha_observation = 0.3 #rand(alpha_observation_options)
 k_observation = 1.0 #rand(k_observation_options)
-tree_queries = 1000 #rand(tree_queries_options)
+tree_queries = 10 # 1000 #rand(tree_queries_options)
 
 pomdp = SpillpointInjectionPOMDP(;exited_reward_amount, exited_reward_binary, obs_rewards, height_noise_std, sat_noise_std)
 
@@ -32,8 +34,8 @@ pomdp = SpillpointInjectionPOMDP(;exited_reward_amount, exited_reward_binary, ob
 
 # Setup and run the solver
 optmisitic_val_estimate(pomdp, s, h, steps) = 0.5*pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped)
-solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=true, estimate_value=optmisitic_val_estimate, k_observation, alpha_observation)
-planner = solve(solver, pomdp)
+optmisitic_val_estimate(bmdp::GenerativeBeliefMDP, b, depth) = mean(bmdp.pomdp.trapped_reward*(trap_capacity(s.m, s.sr, lb=s.v_trapped, ub=0.3, rel_tol=1e-2, abs_tol=1e-3) - s.v_trapped) for s in b.particles) # TODO: Weighted mean?
+
 
 s0 = deepcopy(initial_states[1])
 s = deepcopy(s0)
@@ -50,6 +52,10 @@ up = SpillpointPOMDP.SIRParticleFilter(
 	bandwidth_scale=.5,
 	max_cpu_time=60
 )
+	
+# solver = POMCPOWSolver(;tree_queries, criterion=MaxUCB(exploration_coefficient), tree_in_info=true, estimate_value=optmisitic_val_estimate, k_observation, alpha_observation)
+solver = BeliefMCTSSolver(DPWSolver(; n_iterations=tree_queries, exploration_constant=exploration_coefficient, tree_in_info=true, estimate_value=optmisitic_val_estimate, show_progress=true), up)
+planner = solve(solver, pomdp)
 
 b0 = initialize_belief(up, initialstate(pomdp))
 b = deepcopy(b0)
@@ -60,8 +66,8 @@ plot_belief(b0, s)
 renders = Any[render(pomdp, s, timestep=0, belief=b)]
 beliefs = []
 # belief_plots = [plot_belief(b, s0, title="timestep: 0")]
-trees=[]
-i=1
+trees = []
+i = 1
 ret = 0
 @time while !isterminal(pomdp, s)
 	global b, ret, i, trees, renders, s

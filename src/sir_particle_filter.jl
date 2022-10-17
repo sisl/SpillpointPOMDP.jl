@@ -1,4 +1,4 @@
-@with_kw mutable struct SIRParticleFilter
+@with_kw mutable struct SIRParticleFilter <: Updater
 	model # The POMDP model
 	N # Total particles to produce
 	state2param # Function that maps a state to a vector of params
@@ -34,7 +34,7 @@ function normalized_pdf(kde::KDEMulti, x)
 	MultiKDE.pdf(kde, x) / length(kde.observations[1])
 end
 
-function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
+function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection{S}, a, o) where S <: Any
 	sref = particles(b)[1] # get a reference particle for converting back to the dynamic state
 	
 	# If we aren't going to use prior observations, then clear the storage each time
@@ -49,7 +49,7 @@ function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
 	kde = deepcopy(kde0)
 	scale_bandwidth!(kde, up.bandwidth_scale, up.min_bandwidth)
 	
-	new_particle_states = [] # Particles in their state form
+	new_particle_states::Vector{S} = [] # Particles in their state form
 	new_particle_params = [] # Particles in the parameter vector form
 	poss = Float64[] # p(o | s)
 	weights = Float64[] # Importance weights 
@@ -152,8 +152,3 @@ function POMDPs.update(up::SIRParticleFilter, b::ParticleCollection, a, o)
 	end
 	resample(LowVarianceResampler(up.N), weighted_ps, Random.GLOBAL_RNG)
 end
-
-
-
-
-

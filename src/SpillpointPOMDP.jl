@@ -28,7 +28,7 @@ module SpillpointPOMDP
 	export SubsurfaceDistribution, perturb_surface, plot_belief
 	include("beliefs.jl")
 	
-	export SIRParticleFilter
+	export SIRParticleFilter, SIRParticleBelief
 	include("sir_particle_filter.jl")
 
 end

@@ -169,7 +169,7 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 		end
 	end
 	if !isnothing(belief)
-		for p in belief.particles
+		for p in particles(belief)
 	        plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
 	    end
 	end

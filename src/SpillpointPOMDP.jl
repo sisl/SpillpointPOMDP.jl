@@ -31,5 +31,7 @@ module SpillpointPOMDP
 	export SIRParticleFilter
 	include("sir_particle_filter.jl")
 
-end
+	export BeliefMDP
+	include("belief_mdp.jl")
 
+end

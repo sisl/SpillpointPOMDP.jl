@@ -21,7 +21,7 @@ end
 
 function plot_belief(b, s0=nothing; title="belief", legend=:topleft)
    plt = plot(title=title, ylims=(0,1), legend=legend)
-   for (i, p) in enumerate(b.particles)
+   for (i, p) in enumerate(particles(b))
        plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label=i==1 ? "Particles" : "")
    end
    if !isnothing(s0)

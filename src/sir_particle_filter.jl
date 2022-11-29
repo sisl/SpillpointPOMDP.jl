@@ -158,8 +158,10 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 
 		# Fit the next proposal using KDE
 		obs = [up.state2param(p) for p in particles(obs)]
-		kde = KDEMulti([ContinuousDim() for _ in obs[1]], nothing, obs)
-		scale_bandwidth!(kde, up.bandwidth_scale, up.min_bandwidth)
+		if N_prop > 0
+			kde = KDEMulti([ContinuousDim() for _ in obs[1]], nothing, obs)
+			scale_bandwidth!(kde, up.bandwidth_scale, up.min_bandwidth)
+		end
 	end
 
 	# Do the final resampling and return the particle set

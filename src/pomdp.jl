@@ -31,6 +31,7 @@ end
 	obs_rewards = [-.3, -.7]
 	height_noise_std = 0.1
 	sat_noise_std = 0.02
+	topsurface_std = 0.001
 	exited_reward_amount = -10000
 	exited_reward_binary = -10
 	trapped_reward = 100
@@ -102,7 +103,7 @@ function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 	if a[1] == :drill
 		drill_loc = findfirst(s.m.x .>= a[2])
 		topsurface = s.m.h[drill_loc]
-		return product_distribution([exited..., Normal(topsurface, 0.001)])
+		return product_distribution([exited..., Normal(topsurface, pomdp.topsurface_std)])
 	elseif a[1] == :observe
 		dists = []
 		for x_well in a[2]

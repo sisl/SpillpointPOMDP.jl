@@ -39,6 +39,23 @@ end
 	γ = 0.9
 end
 
+# Function to convert a SpillpointInjectionState to a vector
+function POMDPs.convert_s(::Type{V}, s::SpillpointInjectionState, pomdp::SpillpointInjectionPOMDP) where V<:AbstractArray
+	ρchan = s.m.ρ*ones(length(s.m.x))
+	inj = zeros(length(s.m.x))
+	if !isnothing(s.x_inj)
+		inj[s.m.x .== s.x_inj] .= 1
+	end
+
+	thickness = [SpillpointPOMDP.observe_depth(s.polys, xpt)[2] for xpt in s.m.x]
+	hcat(s.m.x, s.m.h, ρchan, inj, thickness)
+end
+
+# Function to convert a vector to a SpillpointInjectionState
+function POMDPs.convert_s(::Type{S}, vec::V, pomdp::SpillpointInjectionPOMDP) where {S<:SpillpointInjectionState,V<:AbstractArray}
+	@error("not yet implemented")
+end
+
 function POMDPs.actions(m::SpillpointInjectionPOMDP, belief)
 	actions(m, rand(belief))
 end

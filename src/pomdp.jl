@@ -58,36 +58,36 @@ end
 
 function POMDPs.convert_o(::Type{V}, s, a, o::AbstractArray, pomdp::SpillpointInjectionPOMDP) where V<:AbstractArray
 	# Three channels for one-hot porosity, porosity val, one-hot CO2, CO2 depth, CO2 thickness, 
-	ovec = zeros(5, length(s.m.x))
+	ovec = zeros(length(s.m.x), 5)
 	# Leakage will show up as a 1 in the onehot channel
-	ovec[3,1] = o[1]
-	ovec[3,end] = o[2]
+	ovec[1, 3] = o[1]
+	ovec[end, 3] = o[2]
 
 	# If drilling updated the porosity
 	if a[1] == :drill
-		ovec[1, s.m.x .== a[2]] .= 1
-		ovec[2, s.m.x .== a[2]] .= o[3]
+		ovec[s.m.x .== a[2], 1] .= 1
+		ovec[s.m.x .== a[2], 2] .= o[3]
 	elseif a[1] == :observe
 		# Fill in the observations
 		for i in 2:Int((length(o))/2)
 			index = s.m.x .== a[2][i-1]
-			ovec[3, index] .= 1
-			ovec[4, index] .= o[2*i-1]
-			ovec[5, index] .= o[2*i]
+			ovec[index, 3] .= 1
+			ovec[index, 4] .= o[2*i-1]
+			ovec[index, 5] .= o[2*i]
 		end
 	end
 	ovec
 end
 
 function POMDPs.convert_a(::Type{V}, s, a::Tuple{Symbol, Any}, pomdp::SpillpointInjectionPOMDP) where V<:AbstractArray
-	avec = zeros(3, length(s.m.x))
+	avec = zeros(length(s.m.x), 3)
 	if a[1] == :drill
-		avec[1, s.m.x .== a[2]] .= 1
+		avec[s.m.x .== a[2], 1] .= 1
 	elseif a[1] == :inject
-		avec[2, s.m.x .== s.x_inj] .= a[2]
+		avec[s.m.x .== s.x_inj, 2] .= a[2]
 	elseif a[1] == :observe
 		for x in a[2]
-			avec[3, s.m.x .== x] .= 1
+			avec[s.m.x .== x, 3] .= 1
 		end
 	elseif a[1] == :stop
 		avec .= -1

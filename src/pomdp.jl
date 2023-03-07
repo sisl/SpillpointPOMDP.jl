@@ -44,7 +44,9 @@ function POMDPs.convert_s(::Type{V}, s::SpillpointInjectionState, pomdp::Spillpo
 	ρchan = s.m.ρ*ones(length(s.m.x))
 	inj = zeros(length(s.m.x))
 	if !isnothing(s.x_inj)
-		inj[s.m.x .== s.x_inj] .= 1
+		indices = s.m.x .== s.x_inj
+		@assert sum(indices) >= 1
+		inj[indices] .= 1
 	end
 
 	thickness = [SpillpointPOMDP.observe_depth(s.polys, xpt)[2] for xpt in s.m.x]
@@ -65,12 +67,15 @@ function POMDPs.convert_o(::Type{V}, s, a, o::AbstractArray, pomdp::SpillpointIn
 
 	# If drilling updated the porosity
 	if a[1] == :drill
-		ovec[s.m.x .== a[2], 1] .= 1
-		ovec[s.m.x .== a[2], 2] .= o[3]
+		indices = s.m.x .== a[2]
+		@assert sum(indices) >= 1
+		ovec[indices, 1] .= 1
+		ovec[indices, 2] .= o[3]
 	elseif a[1] == :observe
 		# Fill in the observations
 		for i in 2:Int((length(o))/2)
 			index = s.m.x .== a[2][i-1]
+			@assert sum(index) == 1
 			ovec[index, 3] .= 1
 			ovec[index, 4] .= o[2*i-1]
 			ovec[index, 5] .= o[2*i]
@@ -82,12 +87,18 @@ end
 function POMDPs.convert_a(::Type{V}, s, a::Tuple{Symbol, Any}, pomdp::SpillpointInjectionPOMDP) where V<:AbstractArray
 	avec = zeros(length(s.m.x), 3)
 	if a[1] == :drill
-		avec[s.m.x .== a[2], 1] .= 1
+		index = s.m.x .== a[2]
+		@assert sum(index) >= 1
+		avec[index, 1] .= 1
 	elseif a[1] == :inject
-		avec[s.m.x .== s.x_inj, 2] .= a[2]
+		index = s.m.x .== s.x_inj
+		@assert sum(index) >= 1
+		avec[index, 2] .= a[2]
 	elseif a[1] == :observe
 		for x in a[2]
-			avec[s.m.x .== x, 3] .= 1
+			index = s.m.x .== x
+			@assert sum(index) == 1
+			avec[index, 3] .= 1
 		end
 	elseif a[1] == :stop
 		avec .= -1

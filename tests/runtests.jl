@@ -59,7 +59,6 @@ ovec = convert_o(Vector{Float64}, s, a, o, pomdp)
 
 a = (:observe, [0.2, 0.5, 0.8])
 s, o, _ = gen(pomdp, s, a)
-o
 ovec = convert_o(Vector{Float64}, s, a, o, pomdp)
 
 @assert all(ovec[s.m.x .== 0.2, 3] .== 1)

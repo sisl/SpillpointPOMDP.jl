@@ -6,7 +6,8 @@ using Random
 using POMDPs
 using POMDPTools
 
-pomdp = SpillpointInjectionPOMDP()
+pomdp = SpillpointInjectionPOMDP(obs_configurations = [[0.2, 0.5, 0.8], collect(0.1:0.1:0.9)],
+                                 obs_rewards = [-.3, -.9])
 
 # Setup and run the solver
 solver = POMCPOWSolver(tree_queries=100, criterion=MaxUCB(20.0), tree_in_info=true)
@@ -17,14 +18,54 @@ mygif = simulate(GifSimulator(filename="ccs.gif"), pomdp, planner, BootstrapFilt
 
 
 ## Tests regarding the convert_s functions
+Random.seed!(0)
 s = rand(initialstate_distribution(pomdp))
 v2 = convert_s(Vector{Float64}, s, pomdp)
 
+a = (:observe, [0.2, 0.5, 0.8])
+avec = convert_a(Vector{Float64}, s, a, pomdp)
 
-s, _, _ = gen(pomdp, s, (:drill, 0.5))
+@assert all(avec[3, s.m.x .== 0.2] .==  1)
+@assert all(avec[3, s.m.x .== 0.5] .==  1)
+@assert all(avec[3, s.m.x .== 0.8] .==  1)
+@assert sum(avec) ==  3
+
+a = (:drill, 0.5)
+avec = convert_a(Vector{Float64}, s, a, pomdp)
+
+@assert avec[1, 26] ==  1
+@assert sum(avec) ==  1
+
+s, o, _ = gen(pomdp, s, (:drill, 0.5))
 v2 = convert_s(Vector{Float64}, s, pomdp)
 
-s, _, _ = gen(pomdp, s, (:inject, 0.5))
+ovec = convert_o(Vector{Float64}, s, a, o, pomdp)
+@assert ovec[1, 26] == 1
+@assert ovec[2, 26] == o[3]
+@assert sum(ovec) == 1 + o[3]
+
+a = (:inject, 0.5)
+avec = convert_a(Vector{Float64}, s, a, pomdp)
+
+@assert avec[2, 26] ==  0.5
+@assert sum(avec) ==  0.5
+
+a = (:inject, 0.5)
+s, o, _ = gen(pomdp, s, a)
+
+o
+
+ovec = convert_o(Vector{Float64}, s, a, o, pomdp)
+@assert ovec[3, end] == 1
+
+a = (:observe, [0.2, 0.5, 0.8])
+s, o, _ = gen(pomdp, s, a)
+o
+ovec = convert_o(Vector{Float64}, s, a, o, pomdp)
+
+@assert all(ovec[3, s.m.x .== 0.2] .== 1)
+@assert all(ovec[3, s.m.x .== 0.5] .== 1)
+@assert all(ovec[3, s.m.x .== 0.8] .== 1)
 
 # render(pomdp, s)
 

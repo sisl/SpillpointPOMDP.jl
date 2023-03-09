@@ -3,7 +3,7 @@ using POMDPs
 using POMDPTools
 using Plots
 
-function simulate_and_save(pomdp, policy_fn, s0, b0, up, dir, update_belief=true, use_plot=true)
+function simulate_and_save(pomdp, policy_fn, s0, b0, up, dir, max_steps, update_belief=true, use_plot=true)
 	try mkdir(dir) catch end # Make the directory 
 	
 	s = deepcopy(s0)
@@ -58,5 +58,7 @@ function simulate_and_save(pomdp, policy_fn, s0, b0, up, dir, update_belief=true
 		end
 		gif(anim, "$dir/renders.gif", fps=2)
 	end
+
+	# return results
 end
 

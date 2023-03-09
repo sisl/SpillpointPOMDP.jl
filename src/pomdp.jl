@@ -66,7 +66,8 @@ function POMDPs.actions(m::SpillpointInjectionPOMDP, state::SpillpointInjectionS
 	else
 		injection_actions = [(:inject, val) for val in m.injection_rates]
 		observation_actions = [(:observe, config) for config in m.obs_configurations]
-		return [(:stop, 0.0), injection_actions..., observation_actions...]
+		# return [(:stop, 0.0), injection_actions..., observation_actions...]
+		return [injection_actions..., observation_actions...]
 	end
 end
 

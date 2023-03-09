@@ -57,15 +57,6 @@ for trial in 1:Ntrials
 	k_observation=10.0
 	tree_queries=5000
 	
-	# exited_reward_amount = rand(exited_reward_amount_options)
-	# exited_reward_binary = rand(exited_reward_binary_options)
-	# obs_rewards = rand(obs_rewards_options)
-	# height_noise_std = rand(height_noise_std_options)
-	# sat_noise_std = height_noise_std
-	# exploration_coefficient = rand(exploration_coefficient_options)
-	# alpha_observation = rand(alpha_observation_options)
-	# k_observation = rand(k_observation_options)
-	# tree_queries = rand(tree_queries_options)
 
 	params = Dict("exited_reward_amount"=>exited_reward_amount, 
 					  "exited_reward_binary" => exited_reward_binary,

@@ -1,12 +1,26 @@
+issame(x1, y1) = x1[1] ≈ y1[1] && x1[2] ≈ y1[2]
+
 function get_intersection(p1, p2, p3, p4)
 	a = LineSegment(p1, p2)
 	b = LineSegment(p3, p4)
 	pt = intersection(a,b)
 	if isempty(pt)
-		@error "Found no intersection with points: $p1, $p2, $p3, $p4"
+		@warn "Found no intersection with points: $p1, $p2, $p3, $p4. Seeing if any points are close..."
+		if issame(p1, p3)
+			return p1
+		elseif issame(p1, p4)
+			return p1
+		elseif issame(p2, p3)
+			return p2
+		elseif issame(p2, p4)
+			return p2
+		end
 	end
-
-	return pt.element
+	if pt isa LineSegment
+		return pt.p
+	else
+		return pt.element
+	end
 end
 
 function get_polyhedron(m::SpillpointMesh, d, sr)
@@ -124,7 +138,7 @@ function trap_capacity(m::SpillpointMesh)
 	maximum([trap_capacity(m, sr) for sr in srs])
 end
 
-function trap_capacity(m::SpillpointMesh, sr; lb=0.0, ub=1.0, rel_tol=1e-4, abs_tol=1e-5)
+function trap_capacity(m::SpillpointMesh, sr; lb=0.0, ub=1.0, rel_tol=1e-2, abs_tol=1e-3)
 	function max_trapped(v)
 		_, v_trapped, v_exited = inject(m, sr, v)
 		return -v_trapped + 1000*v_exited

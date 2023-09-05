@@ -131,6 +131,7 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 
 	if a[1] == :observe
 	elseif a[1] == :drill
+		@assert isnothing(s.x_inj)
 		x_inj = a[2]
 		sr = spill_region(s.m, x_inj)
 	elseif a[1] == :stop

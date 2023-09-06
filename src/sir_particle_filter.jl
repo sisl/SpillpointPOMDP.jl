@@ -20,6 +20,7 @@ end
 end
 
 ParticleFilters.particles(b::SIRParticleBelief) = particles(b.particle_collection)
+ParticleFilters.weighted_particles(b::SIRParticleBelief) = weighted_particles(b.particle_collection)
 ParticleFilters.support(b::SIRParticleBelief) = support(b.particle_collection)
 # function ParticleFilters.rand(rng::AbstractRNG, b::SIRParticleBelief{S}) where S <: Any
 # 	return SIRParticleBelief{S}(ParticleCollection{S}([rand(rng, b.particle_collection)]), b.prior_observations)

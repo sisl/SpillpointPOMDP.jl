@@ -12,6 +12,7 @@
 	elite_frac = 0.1 # For resampling, the elite fraction to use
 	prior = nothing # Initial prior (used to compute importance weights)
 	max_cpu_time = Inf
+	rng = Random.GLOBAL_RNG
 end
 
 @with_kw mutable struct SIRParticleBelief{S}
@@ -29,9 +30,9 @@ function ParticleFilters.rand(rng::AbstractRNG, b::SIRParticleBelief{S}) where S
 	return rand(rng, b.particle_collection)
 end
 
-function Base.rand(kde::KDEMulti)
-	randrow = rand(1:length(kde.observations[1]))
-	x = [rand(Normal(kde.observations[i][randrow], kde.KDEs[i].bandwidth)) for i=1:length(kde.dims)]
+function Base.rand(rng::AbstractRNG, kde::KDEMulti)
+	randrow = rand(rng, 1:length(kde.observations[1]))
+	x = [rand(rng, Normal(kde.observations[i][randrow], kde.KDEs[i].bandwidth)) for i=1:length(kde.dims)]
 end
 
 function POMDPs.initialize_belief(bu::SIRParticleFilter, D)
@@ -87,13 +88,13 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 
 		# Take samples from proposal dist and compute weights
 		for i=1:N_prop
-			x = up.clampfn(rand(kde)) # Sample a new particle (and clamp it as necessary)
+			x = up.clampfn(rand(up.rng, kde)) # Sample a new particle (and clamp it as necessary)
 
 			pos = 1
 			sp = nothing
 			for (sref, a, o) in prior_observations
 				s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
-				sp, _, _ = gen(up.model, s, a) # Propogate foward with the gen function
+				sp, _, _ = gen(up.model, s, a, up.rng) # Propogate foward with the gen function
 
 				pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
 			end
@@ -117,7 +118,7 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 			sp = nothing
 			for (sref, a, o) in prior_observations
 				s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
-				sp, _, _ = gen(up.model, s, a) # Propogate foward with the gen function
+				sp, _, _ = gen(up.model, s, a, up.rng) # Propogate foward with the gen function
 
 				pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
 			end
@@ -137,7 +138,7 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 
 		# Construct a belief from the current set of particles
 		weighted_ps = WeightedParticleBelief(new_particle_states, weights.*poss)
-		obs = resample(LowVarianceResampler(up.N), weighted_ps, Random.GLOBAL_RNG)
+		obs = resample(LowVarianceResampler(up.N), weighted_ps, up.rng)
 
 		Nunique = length(unique([p.m.h for p in particles(obs)]))
 		if Nunique >= 0.5*up.N || length(new_particle_states) > 100*up.N
@@ -170,7 +171,7 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 	if sum(weights.*poss) == 0
 		println("found all zero weights")
 	end
-	posterior_particles = resample(LowVarianceResampler(up.N), weighted_ps, Random.GLOBAL_RNG)
+	posterior_particles = resample(LowVarianceResampler(up.N), weighted_ps, up.rng)
 	if b isa SIRParticleBelief
 		return SIRParticleBelief(posterior_particles, prior_observations)
 	else

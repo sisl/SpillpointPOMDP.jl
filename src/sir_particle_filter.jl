@@ -12,6 +12,8 @@
 	elite_frac = 0.1 # For resampling, the elite fraction to use
 	prior = nothing # Initial prior (used to compute importance weights)
 	max_cpu_time = Inf
+	use_threads = false
+	verbose = false
 	rng = Random.GLOBAL_RNG
 end
 
@@ -26,8 +28,8 @@ ParticleFilters.support(b::SIRParticleBelief) = support(b.particle_collection)
 # function ParticleFilters.rand(rng::AbstractRNG, b::SIRParticleBelief{S}) where S <: Any
 # 	return SIRParticleBelief{S}(ParticleCollection{S}([rand(rng, b.particle_collection)]), b.prior_observations)
 # end
-function ParticleFilters.rand(rng::AbstractRNG, b::SIRParticleBelief{S}) where S <: Any
-	return rand(rng, b.particle_collection)
+function Base.rand(rng::AbstractRNG, b::SIRParticleBelief{S}, n::Integer=1) where S <: Any
+	return n == 1 ? rand(rng, b.particle_collection) : rand(rng, b.particle_collection, n)
 end
 
 function Base.rand(rng::AbstractRNG, kde::KDEMulti)
@@ -36,7 +38,7 @@ function Base.rand(rng::AbstractRNG, kde::KDEMulti)
 end
 
 function POMDPs.initialize_belief(bu::SIRParticleFilter, D)
-	particles = ParticleCollection(rand(D, bu.N))
+	particles = ParticleCollection(rand(bu.rng, D, bu.N))
 	return SIRParticleBelief(particles, [])
 end
 
@@ -49,6 +51,33 @@ end
 
 function normalized_pdf(kde::KDEMulti, x)
 	MultiKDE.pdf(kde, x) / length(kde.observations[1])
+end
+
+
+"""
+Run `@sync` based on `use_threads` flag.
+"""
+macro conditional_sync(use_threads, expr)
+    esc(quote
+        if $use_threads
+            @sync $expr
+        else
+            $expr
+        end
+    end)
+end
+
+"""
+Run `Threads.@spawn` based on `use_threads` flag.
+"""
+macro conditional_spawn(use_threads, expr)
+    esc(quote
+        if $use_threads
+            Threads.@spawn $expr
+        else
+            $expr
+        end
+    end)
 end
 
 function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},ParticleCollection{S}}, a, o) where S <: Any
@@ -78,7 +107,7 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 	# plots = []
 	tstart = time()
 	# Loop until the number of particles is reached
-	while true #length(new_particle_params) < 10*up.N
+	while true # length(new_particle_params) < 10*up.N
 		if time() - tstart > up.max_cpu_time
 			break
 		end
@@ -86,50 +115,68 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 		# Compute the number of samples from proposal dist
 		N_prop = floor(Int,(1-up.fraction_prior)*up.N_samples_before_resample)
 
+		# Compute the number of samples from the prior dist
+		N_prior = (up.N_samples_before_resample - N_prop)
+
+		# Total samples
+		N_total = N_prop + N_prior
+
+		# Local collections for threaded parallelization
+		local_new_particle_states = Vector{S}(undef, N_total)
+		local_new_particle_params = Vector(undef, N_total)
+		local_weights = Vector{Float64}(undef, N_total)
+		local_poss = Vector{Float64}(undef, N_total)
+
 		# Take samples from proposal dist and compute weights
-		for i=1:N_prop
-			x = up.clampfn(rand(up.rng, kde)) # Sample a new particle (and clamp it as necessary)
+		@conditional_sync up.use_threads for i in 1:N_prop
+			@conditional_spawn up.use_threads begin
+				x = up.clampfn(rand(up.rng, kde)) # Sample a new particle (and clamp it as necessary)
+				pos = 1
+				sp = nothing
+				for (sref, a, o) in prior_observations
+					s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
+					sp, _, _ = gen(up.model, s, a, up.rng) # Propogate foward with the gen function
+					pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
+				end
+				if use_all_prior_obs
+					weight = clamp(Distributions.pdf(up.prior, x)  / normalized_pdf(kde, x), 0, up.weight_clamp) # Compute the importance weight (relative to the prior)
+				else
+					weight = clamp(normalized_pdf(kde0, x)  / normalized_pdf(kde, x), 0, up.weight_clamp)
+				end
 
-			pos = 1
-			sp = nothing
-			for (sref, a, o) in prior_observations
-				s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
-				sp, _, _ = gen(up.model, s, a, up.rng) # Propogate foward with the gen function
-
-				pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
+				# Store the particles in the shared arrays
+				local_new_particle_states[i] = sp
+				local_new_particle_params[i] = x
+				local_weights[i] = weight
+				local_poss[i] = pos
 			end
-			if use_all_prior_obs
-				weight = clamp(Distributions.pdf(up.prior, x)  / normalized_pdf(kde, x), 0, up.weight_clamp) # Compute the importance weight (relative to the prior)
-			else
-				weight = clamp(normalized_pdf(kde0, x)  / normalized_pdf(kde, x), 0, up.weight_clamp)
-			end
-
-			# Store the particles in the arrays
-			push!(new_particle_states, sp)
-			push!(new_particle_params, x)
-			push!(weights, weight)
-			push!(poss, pos)
 		end
 
 		# Include some samples from prior
-		for i=1:(up.N_samples_before_resample - N_prop)
-			x = rand(up.prior)
-			pos = 1
-			sp = nothing
-			for (sref, a, o) in prior_observations
-				s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
-				sp, _, _ = gen(up.model, s, a, up.rng) # Propogate foward with the gen function
-
-				pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
+		@conditional_sync up.use_threads for i in 1:N_prior
+			@conditional_spawn up.use_threads begin
+				x = rand(up.prior)
+				pos = 1
+				sp = nothing
+				for (sref, a, o) in prior_observations
+					s = up.param2state(x, sref) # Get the state from the parameter vector and refence state
+					sp, _, _ = gen(up.model, s, a, up.rng) # Propogate foward with the gen function
+					pos *= Distributions.pdf(observation(up.model, s, a, sp), o) # Compute the observation weight p(o | s)
+				end
+				# Store the particles in the shared arrays
+				j = N_prop + i
+				local_new_particle_states[j] = sp
+				local_new_particle_params[j] = x
+				local_weights[j] = 1.0
+				local_poss[j] = pos
 			end
-
-
-			# Store the particles in the arrays
-			push!(new_particle_states, sp)
-			push!(new_particle_params, x)
-			push!(weights, 1.0)
-			push!(poss, pos)
 		end
+
+		# Add local samples from parallelization to global samples
+		new_particle_states = vcat(new_particle_states, local_new_particle_states)
+		new_particle_params = vcat(new_particle_params, local_new_particle_params)
+		weights = vcat(weights, local_weights)
+		poss = vcat(poss, local_poss)
 
 		# p = plot(ylims=(0,1), title="count: $(length(new_particle_params))")
 		# for particle in new_particle_states[end-up.N_samples_before_resample+1:end]
@@ -140,17 +187,17 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 		weighted_ps = WeightedParticleBelief(new_particle_states, weights.*poss)
 		obs = resample(LowVarianceResampler(up.N), weighted_ps, up.rng)
 
-		Nunique = length(unique([p.m.h for p in particles(obs)]))
-		if Nunique >= 0.5*up.N || length(new_particle_states) > 100*up.N
+		N_unique = length(unique([p.m.h for p in particles(obs)]))
+		if N_unique >= 0.5*up.N || length(new_particle_states) > 100*up.N
 			break
 		end
-		# println("Nunique: ", Nunique, " total: ", length(new_particle_states), " frac: ", Nunique / length(new_particle_states))
+		# println("N_unique: ", N_unique, " total: ", length(new_particle_states), " frac: ", N_unique / length(new_particle_states))
 
-		Nelite = ceil(Int, up.N_samples_before_resample*up.elite_frac)
+		N_elite = ceil(Int, up.N_samples_before_resample*up.elite_frac)
 		# If we don't have enough unique samples, then we will just take the elite samples
-		if Nunique < Nelite
+		if N_unique < N_elite
 			sorted_indices = sortperm(weights .* poss, rev=true)
-			obs = ParticleCollection(new_particle_states[sorted_indices[1:Nelite]])
+			@views obs = ParticleCollection(new_particle_states[sorted_indices[1:N_elite]])
 		end
 
 		# for particle in particles(obs)
@@ -168,7 +215,7 @@ function POMDPs.update(up::SIRParticleFilter, b::Union{SIRParticleBelief{S},Part
 
 	# Do the final resampling and return the particle set
 	weighted_ps = WeightedParticleBelief(new_particle_states, weights.*poss)
-	if sum(weights.*poss) == 0
+	if up.verbose && sum(weights.*poss) == 0
 		println("found all zero weights")
 	end
 	posterior_particles = resample(LowVarianceResampler(up.N), weighted_ps, up.rng)

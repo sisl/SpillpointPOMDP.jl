@@ -5,7 +5,7 @@ function get_intersection(p1, p2, p3, p4)
 	b = LineSegment(p3, p4)
 	pt = intersection(a,b)
 	if isempty(pt)
-		@warn "Found no intersection with points: $p1, $p2, $p3, $p4. Seeing if any points are close..."
+		# @warn "Found no intersection with points: $p1, $p2, $p3, $p4. Seeing if any points are close..."
 		if issame(p1, p3)
 			return p1
 		elseif issame(p1, p4)

@@ -42,16 +42,15 @@ function construct_surface(x, lobe_height, center_height, linear_amplitude, poro
 	SpillpointMesh(x, h, porosity, params=(lobe_height, center_height, linear_amplitude))
 end
 
-function Base.rand(ssd::SubsurfaceDistribution)
+function Base.rand(rng::AbstractRNG, ssd::SubsurfaceDistribution)
 	# Sample the shape parameters to construct the mesh
-	m = construct_surface(ssd.x, rand(ssd.lobe_height), rand(ssd.center_height), rand(ssd.linear_amplitude), rand(ssd.ρ))
+	m = construct_surface(ssd.x, rand(rng, ssd.lobe_height), rand(rng, ssd.center_height), rand(rng, ssd.linear_amplitude), rand(rng, ssd.ρ))
 	
 	SpillpointInjectionState(;m)
 end
 
-Base.rand(ssd::SubsurfaceDistribution, d::Int) = [rand(ssd) for _ in 1:d]
-
-Base.rand(rng::AbstractRNG, ssd::SubsurfaceDistribution) = rand(ssd)
+Base.rand(rng::AbstractRNG, ssd::SubsurfaceDistribution, d::Int) = [rand(rng, ssd) for _ in 1:d]
+# Base.rand(rng::AbstractRNG, ssd::SubsurfaceDistribution) = rand(ssd)
 
 function perturb_surface(s::SpillpointInjectionState)
 	ρ_dist = Distributions.Uniform(-0.05, 0.05)

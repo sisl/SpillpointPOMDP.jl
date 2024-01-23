@@ -12,7 +12,7 @@ end
 function params2state(params, sref)
 	m = construct_surface(sref.m.x, params...)
 	sr = isnothing(sref.x_inj) ? nothing : spill_region(m, sref.x_inj)
-	
+
 	# NOTE: We are explicitly NOT re-injecting and computing polys. Its not needed and is costly
 	SpillpointInjectionState(sref; m, sr, v_trapped=sref.v_trapped, v_exited=sref.v_exited)
 end
@@ -59,7 +59,7 @@ function POMDPs.convert_s(::Type{S}, vec::V, pomdp::SpillpointInjectionPOMDP) wh
 end
 
 function POMDPs.convert_o(::Type{V}, s, a, o::AbstractArray, pomdp::SpillpointInjectionPOMDP) where V<:AbstractArray
-	# Three channels for one-hot porosity, porosity val, one-hot CO2, CO2 depth, CO2 thickness, 
+	# Three channels for one-hot porosity, porosity val, one-hot CO2, CO2 depth, CO2 thickness,
 	ovec = zeros(length(s.m.x), 5)
 	# Leakage will show up as a 1 in the onehot channel
 	ovec[1, 3] = o[1]
@@ -142,12 +142,12 @@ function POMDPs.gen(pomdp::SpillpointInjectionPOMDP, s, a, rng=Random.GLOBAL_RNG
 	else
 		@error "unrecognized action: $(a)"
 	end
-	
+
 	total_injected = s.v_trapped + s.v_exited + pomdp.Δt * injection_rate
 	polys, v_trapped, v_exited = inject(s.m, s.sr, total_injected)
-	
+
 	sp = SpillpointInjectionState(s; sr, x_inj, polys, v_trapped, v_exited, stop)
-	
+
 	return (sp=sp, o=rand(observation(pomdp, s, a, sp)), r=reward(pomdp, s, a, sp))
 end
 
@@ -168,7 +168,7 @@ function POMDPs.observation(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 			@error string("exited: ", sp.v_exited, " xleft: ", xleft, " xright ", xright)
 		end
 	end
-	
+
 	# Construct distributions
 	if a[1] == :drill
 		drill_loc = findfirst(s.m.x .>= a[2])
@@ -202,7 +202,7 @@ function POMDPs.reward(pomdp::SpillpointInjectionPOMDP, s, a, sp)
 		obs_reward = 0
 	end
 	exited_penalty = pomdp.exited_reward_binary * (Δexited > eps(Float32))
-	
+
 	pomdp.exited_reward_amount*Δexited + pomdp.trapped_reward*Δtrapped + obs_reward + exited_penalty
 end
 
@@ -212,10 +212,10 @@ POMDPs.isterminal(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState) = s.
 
 POMDPs.initialstate(m::SpillpointInjectionPOMDP) = m.s0_dist
 
-function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; belief=nothing, timestep=nothing, return_one=false)
+function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionState, a=nothing; belief=nothing, timestep=nothing, return_one=false, titlefontsize=9)
 	poly, v_trapped, v_exited = inject(s.m, s.sr, s.v_trapped+s.v_exited)
 	x, h = s.m.x, s.m.h
-	p3 = plot([1], palette=:blues, color=1, label=L"{\rm CO}_2")
+	p3 = plot([1], palette=:blues, color=1, label=L"\mathrm{CO}_2")
 	# for i in 1:length(x)
 	# 	scatter!([x[i]], [h[i]], color=s.m.SR[i], label="")
 	# end
@@ -224,29 +224,33 @@ function POMDPTools.render(m::SpillpointInjectionPOMDP, s::SpillpointInjectionSt
 			plot!(p, label="", palette=:blues, color=1, linecolor=1)
 		end
 	end
-	plot!(x, h, legend = :topright, linewidth=2, label="Top Surface", color=!isnothing(belief) ? :red : :black, yrange=(0,1.0), ylabel="Height", xlabel="Position")
-	
+
+	if !isnothing(belief)
+		for p in particles(belief)
+			plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
+		end
+	end
+
+	plot!(x, h, legend = :topright, linewidth=2, label="Top Surface", color=!isnothing(belief) ? :crimson : :black, alpha=0.5, yrange=(0,1.0), ylabel="Height", xlabel="Position")
+
 	maxh = maximum(s.m.h)
-	title=isnothing(a) ? "Reservoir Top Surface" : "action: $a"
+	title = isnothing(a) ? "Reservoir Top Surface" : "action: $a"
 	if !isnothing(timestep)
 		title = string(title, " timestep: $timestep")
 	end
 	if !isnothing(s.x_inj)
-		plot!([s.x_inj, s.x_inj], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:black, label="Injector", title=title)
+		arrowy = maxh + 0.3
+		plot!([s.x_inj, s.x_inj], [arrowy, maxh], arrow=:closed, ls=:dash, lw=0.5, color=:black, label=false, title=title, titlefontsize=titlefontsize)
+		scatter!([s.x_inj], [arrowy], marker=:dtriangle, ms=5, ls=:dash, lw=0.5, color=:white, msc=:black, label="Injector")
 	end
 	if !isnothing(a) && a[1] == :observe
 		for (i, o) in enumerate(a[2])
-			plot!([o, o], [maxh + 0.2, maxh], arrow=true, linewidth=4, color=:blue, label=i==1 ? "Observation Loc" : "")
+			plot!([o, o], [maxh + 0.2, maxh], arrow=:closed, color=:blue, label=i==1 ? "Obs. Location" : "")
 		end
 	end
-	if !isnothing(belief)
-		for p in particles(belief)
-	        plot!(p.m.x, p.m.h, alpha=0.2, color=:gray, label="")
-	    end
-	end
-	
-	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], title="C02 volume", label="")
-	return_one ? p3 : plot(p3, p4, size=(900,300))
+
+	p4 = bar(["trapped", "exited"], [v_trapped, v_exited], color=["#007662", "#8c1515"], bar_width=0.5, title=raw"$\mathrm{C0}_2$ volume", titlefontsize=titlefontsize, label="")
+	return_one ? p3 : plot(p3, p4, size=(900,300), margin=5Plots.mm)
 end
 
 POMDPTools.render(m::SpillpointInjectionPOMDP, step; kwargs...) = render(m, step[:s], step[:a])

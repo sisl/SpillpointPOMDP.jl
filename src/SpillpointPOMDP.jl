@@ -11,7 +11,9 @@ module SpillpointPOMDP
 	using Plots
 	using Random
 	using LaTeXStrings
-	
+	using Distributed
+	using DistributedArrays
+
 	## For SIRParticleFilter
 	using MultiKDE
 	using ParticleFilters
